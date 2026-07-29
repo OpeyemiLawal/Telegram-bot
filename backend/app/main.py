@@ -26,7 +26,19 @@ async def lifespan(_: FastAPI):
     await bot.set_webhook(
         url=settings.webhook_url,
         secret_token=settings.webhook_secret,
-        drop_pending_updates=True,
+        # False, and it has to be, on any host that sleeps an idle instance.
+        #
+        # The sequence that makes True unusable: the instance is asleep, the
+        # player sends /start, Telegram cannot deliver so it queues the update
+        # and retries, the retry wakes the instance — and this line then throws
+        # away the very message that woke it. The player sees silence, tries
+        # again, and the second attempt works because the instance is now warm.
+        # "Nothing happens the first time" is the exact signature.
+        #
+        # Keeping the queue means the update is delivered once the app is
+        # listening. The cost is that a genuinely stale backlog gets replayed
+        # after a long outage, which for a /start handler is harmless.
+        drop_pending_updates=False,
         allowed_updates=["message", "callback_query"],
     )
     await bot.set_chat_menu_button(menu_button=persistent_menu_button())
