@@ -34,7 +34,21 @@ async def lifespan(_: FastAPI):
 
     yield
 
-    await bot.delete_webhook()
+    # Deliberately NOT calling delete_webhook() here.
+    #
+    # A host that sleeps an idle instance — Render's free tier, most
+    # scale-to-zero platforms — runs this shutdown path routinely, not just on
+    # a real deploy. Unregistering the webhook there deadlocks the bot: Telegram
+    # has nowhere to deliver updates, and an inbound update is the only thing
+    # that would have woken the instance. The bot goes silent ~15 minutes after
+    # every deploy and the logs show a clean shutdown with no error.
+    #
+    # Leaving the registration in place is correct regardless of host. It points
+    # at a fixed URL, `set_webhook` on the next boot is idempotent, and Telegram
+    # retries a failed delivery, so updates arriving mid-restart survive.
+    #
+    # To genuinely unregister — switching to polling for local work — use
+    # run_polling.py, which deletes it explicitly on startup.
     await bot.session.close()
 
 
