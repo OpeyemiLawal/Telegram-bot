@@ -16,15 +16,25 @@ def _url(path: str = "") -> WebAppInfo:
     return WebAppInfo(url=f"{_settings.miniapp_url}{path}")
 
 
-def main_menu() -> InlineKeyboardMarkup:
+def main_menu(*, has_wallet: bool = False) -> InlineKeyboardMarkup:
     """The bot's whole surface area.
 
     web_app buttons only work in private chats — that is fine, and it is also
     a feature: it keeps wallet entry points out of groups.
+
+    `has_wallet` changes the first button from an instruction into a
+    destination. "Wallet" reads as unfinished setup to someone who has already
+    linked one, and the label is the only signal the chat can carry — the bot
+    cannot see inside the Mini App.
     """
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="Wallet", web_app=_url("/wallet"))],
+            [
+                InlineKeyboardButton(
+                    text="View wallet" if has_wallet else "Connect wallet",
+                    web_app=_url("/wallet"),
+                )
+            ],
             [InlineKeyboardButton(text="Games", web_app=_url("/games"))],
             [
                 InlineKeyboardButton(

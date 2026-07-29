@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   useAppKit,
@@ -141,7 +141,35 @@ function ConnectedWalletConnector({
     }
   }
 
+  /**
+   * Signs as soon as the wallet reports connected, rather than parking the user
+   * on a second button.
+   *
+   * Connecting and proving ownership are one intention — "use this wallet" —
+   * split into two taps only because AppKit resolves the connection before we
+   * can ask for a signature. Worse, the wallet round trip relaunches the Mini
+   * App, so the second tap lands on a freshly mounted screen and reads as
+   * "nothing happened, try again".
+   *
+   * `attempted` guards against the effect re-firing: a failed signature must
+   * not loop, and after a rejection the user gets an explicit retry button.
+   */
+  const attempted = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isConnected || !address || !walletProvider) return;
+    if (verified || working) return;
+    if (attempted.current === address) return;
+
+    attempted.current = address;
+    void verifySelectedWallet();
+    // verifySelectedWallet closes over exactly these; listing it would recreate
+    // the identity every render and defeat the guard.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected, address, walletProvider, verified, working]);
+
   async function forgetWallet() {
+    attempted.current = null;
     setWorking(true);
     setError(null);
     try {
@@ -176,7 +204,9 @@ function ConnectedWalletConnector({
         {verified
           ? "This wallet is linked to your Telegram account and will be used by every game."
           : isConnected
-            ? "Sign one message to prove this wallet belongs to you. This costs no SOL."
+            ? working
+              ? "Approve the signature in your wallet. It costs no SOL."
+              : "The signature was not completed. Nothing was sent."
             : user.wallet_address
               ? "Reconnect this wallet when a game needs a signature."
               : "Connect Phantom, Solflare, Backpack, or another Solana wallet."}
@@ -187,41 +217,35 @@ function ConnectedWalletConnector({
       <div className="wallet-panel__actions">
         {!isConnected && (
           <>
-            {/* On a phone "Connect" lists installed wallets and deep-links out
-                to the chosen one. On Telegram Desktop or Web there is nothing
-                to deep-link into, so the QR is the primary path there. Whichever
-                is not primary is offered as the secondary, so neither is a dead
-                end. */}
+            {/* "Connect" lists installed wallets and deep-links into the chosen
+                one, which is the whole interaction on a phone. The QR exists so
+                a *desktop* user can scan with the wallet on their phone — on
+                mobile it is noise, because the wallet is already on the device
+                doing the scanning. So it is offered on desktop only. */}
             <button
               className="button"
               disabled={working}
-              onClick={() =>
-                void launch(
-                  isMobileTelegram()
-                    ? "Connect"
-                    : "ConnectingWalletConnectBasic",
-                )
-              }
+              onClick={() => void launch("Connect")}
             >
-              {isMobileTelegram() ? "Connect wallet" : "Connect wallet (QR)"}
+              Connect wallet
             </button>
 
-            <button
-              className="button button--quiet"
-              disabled={working}
-              onClick={() =>
-                void launch(
-                  isMobileTelegram()
-                    ? "ConnectingWalletConnectBasic"
-                    : "Connect",
-                )
-              }
-            >
-              {isMobileTelegram() ? "Scan QR instead" : "Choose a wallet"}
-            </button>
+            {!isMobileTelegram() && (
+              <button
+                className="button button--quiet"
+                disabled={working}
+                onClick={() => void launch("ConnectingWalletConnectBasic")}
+              >
+                Scan QR instead
+              </button>
+            )}
           </>
         )}
 
+        {/* Connected but unproven. The signature is requested automatically, so
+            this branch is only reached while it is in flight, or after the user
+            declined it in their wallet — hence "Try again" rather than a first
+            instruction. */}
         {isConnected && !verified && (
           <>
             <button
@@ -229,14 +253,14 @@ function ConnectedWalletConnector({
               disabled={working}
               onClick={() => void verifySelectedWallet()}
             >
-              {working ? "Waiting for wallet..." : "Verify and use wallet"}
+              {working ? "Check your wallet…" : "Try signing again"}
             </button>
             <button
               className="button button--quiet"
               disabled={working}
-              onClick={() => void open({ view: "Account" })}
+              onClick={() => void forgetWallet()}
             >
-              Choose another
+              Use a different wallet
             </button>
           </>
         )}
@@ -247,7 +271,7 @@ function ConnectedWalletConnector({
             disabled={working}
             onClick={() => void forgetWallet()}
           >
-            {working ? "Disconnecting..." : "Disconnect wallet"}
+            {working ? "Disconnecting…" : "Disconnect wallet"}
           </button>
         )}
       </div>

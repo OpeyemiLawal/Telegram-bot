@@ -5,10 +5,37 @@ import re
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.types import CallbackQuery, Message
+from sqlalchemy import select
 
 from app.bot.keyboards import main_menu, open_app_button
+from app.db import SessionMaker
+from app.models import User
 
 router = Router(name="main")
+
+
+async def _has_linked_wallet(message: Message) -> bool:
+    """Whether this Telegram user has already proved ownership of a wallet.
+
+    Read-only and deliberately forgiving: this only decides a button label, so
+    a database hiccup should degrade to the pre-link wording rather than break
+    the bot's reply. Nothing here grants access — the Mini App still verifies
+    initData and the wallet signature independently.
+    """
+    if message.from_user is None:
+        return False
+
+    try:
+        async with SessionMaker() as session:
+            address = await session.scalar(
+                select(User.wallet_address).where(
+                    User.telegram_id == message.from_user.id
+                )
+            )
+        return bool(address)
+    except Exception:  # noqa: BLE001 — a label is never worth a failed reply
+        return False
+
 
 WELCOME = (
     "<b>Solana Games</b>\n\n"
@@ -17,19 +44,24 @@ WELCOME = (
     "Pick where to start."
 )
 
+# Describes the wallet model as actually built: the player brings their own
+# wallet and we never hold a key. An earlier draft of this text promised a
+# custodial wallet "created for you", which is both untrue and the more
+# dangerous direction to be wrong in — it teaches players to expect us to hold
+# keys, which is exactly the expectation a phishing bot would exploit.
 HELP = (
     "<b>How it works</b>\n\n"
     "<b>Your wallet</b>\n"
-    "Created for you the first time you open the app. The keys live in secure "
-    "hardware at our wallet provider, not on our servers and not in this chat. "
-    "You can export or move it whenever you want.\n\n"
-    "<b>Your balance</b>\n"
-    "Deposit SOL or USDC to play. $SGA you earn is tracked as you play and "
-    "settles on-chain when you claim it.\n\n"
+    "You connect a wallet you already own — Phantom, Solflare, Backpack, or "
+    "another Solana wallet. We never create one for you, never see your seed "
+    "phrase, and never hold your keys. All we store is your public address, "
+    "and only after your wallet signs a message proving it is yours.\n\n"
+    "<b>Approving things</b>\n"
+    "Every transaction is approved in your own wallet. If something moves, you "
+    "tapped approve. We cannot move funds on your behalf.\n\n"
     "<b>What this chat is for</b>\n"
-    "Launching the app and sending you alerts. Nothing else. "
-    "Every action that touches your money happens inside the app, where the "
-    "connection is encrypted end to end.\n\n"
+    "Launching the app and sending you alerts. Nothing else. Everything that "
+    "touches your wallet happens inside the app.\n\n"
     "<b>We will never ask for a seed phrase or private key.</b> "
     "Anyone who does — here or anywhere — is stealing from you."
 )
@@ -42,14 +74,21 @@ _BASE58_KEY = re.compile(r"[1-9A-HJ-NP-Za-km-z]{80,}")
 
 @router.message(CommandStart())
 async def handle_start(message: Message) -> None:
-    await message.answer(WELCOME, reply_markup=main_menu())
+    await message.answer(
+        WELCOME, reply_markup=main_menu(has_wallet=await _has_linked_wallet(message))
+    )
 
 
 @router.message(Command("wallet"))
 async def handle_wallet(message: Message) -> None:
+    linked = await _has_linked_wallet(message)
     await message.answer(
-        "Your wallet, balances, and deposit address.",
-        reply_markup=open_app_button("Open wallet", "/wallet"),
+        "Your linked wallet and balances."
+        if linked
+        else "Connect the wallet you will use across every game.",
+        reply_markup=open_app_button(
+            "View wallet" if linked else "Connect wallet", "/wallet"
+        ),
     )
 
 
@@ -63,7 +102,9 @@ async def handle_games(message: Message) -> None:
 
 @router.message(Command("help"))
 async def handle_help(message: Message) -> None:
-    await message.answer(HELP, reply_markup=main_menu())
+    await message.answer(
+        HELP, reply_markup=main_menu(has_wallet=await _has_linked_wallet(message))
+    )
 
 
 @router.callback_query(F.data == "help")
@@ -93,5 +134,5 @@ async def handle_loose_text(message: Message) -> None:
 
     await message.answer(
         "I only handle launching the app. Use the buttons below.",
-        reply_markup=main_menu(),
+        reply_markup=main_menu(has_wallet=await _has_linked_wallet(message)),
     )
