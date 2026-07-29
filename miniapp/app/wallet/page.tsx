@@ -114,17 +114,22 @@ function ConnectActions({
 }) {
   const surface = telegramSurface();
 
+  // Nothing to offer on the Telegram desktop client. Wallet pairing needs a
+  // WalletConnect relay socket that its webview does not complete, so every
+  // button here would lead to a spinner that never resolves. An action that
+  // cannot succeed is worse than no action: it invites the user to keep
+  // waiting, then to try again, then to conclude the app is broken.
+  // `DesktopRoutes` below carries the two routes that do work.
+  if (surface === "desktop") return null;
+
   return (
     <>
-      {/* On the desktop client this is the quiet option, not the loud one. It
-          leads to a QR that cannot finish loading there, so the routes that do
-          work get the emphasis instead. */}
       <button
-        className={surface === "desktop" ? "button button--quiet" : "button"}
+        className="button"
         disabled={working}
         onClick={() => void launch("Connect")}
       >
-        {surface === "desktop" ? "Try connecting anyway" : "Connect wallet"}
+        Connect wallet
       </button>
 
       {/* Jumping straight to the QR view is available but not the default.
@@ -166,27 +171,46 @@ function DesktopRoutes() {
   const link = process.env.NEXT_PUBLIC_TELEGRAM_RETURN_URL;
 
   return (
-    <div className="notice" style={{ marginTop: 12 }}>
-      <p className="body">
-        <strong>Connecting a wallet needs your phone or a browser.</strong> The
-        Telegram desktop app cannot reach the wallet network, so the QR code
-        never finishes loading.
+    <div className="notice" style={{ marginTop: 4 }}>
+      <p className="heading" style={{ marginBottom: 8 }}>
+        Connect from your phone or browser
       </p>
-      <ul className="body" style={{ margin: "10px 0 0", paddingLeft: 18 }}>
-        <li>
-          Open this bot on your phone — two taps, nothing to scan.
+      <p className="body">
+        The Telegram desktop app cannot reach the wallet network, so a wallet
+        cannot be connected here. Both of these take under a minute:
+      </p>
+
+      <ol className="body" style={{ margin: "12px 0 0", paddingLeft: 20 }}>
+        <li style={{ marginBottom: 10 }}>
+          <strong>On your phone</strong> — open this bot in Telegram and tap
+          Play. Two taps, nothing to scan.
           {link ? (
-            <>
-              {" "}
-              <code style={{ wordBreak: "break-all" }}>{link}</code>
-            </>
+            <div
+              style={{
+                marginTop: 4,
+                fontSize: 12,
+                fontFamily: "ui-monospace, monospace",
+                wordBreak: "break-all",
+                opacity: 0.75,
+              }}
+            >
+              {link}
+            </div>
           ) : null}
         </li>
-        <li style={{ marginTop: 6 }}>
-          Or open Telegram at <code>web.telegram.org</code> in your browser and
-          launch this app there.
+        <li>
+          <strong>In a browser</strong> — open{" "}
+          <span style={{ fontFamily: "ui-monospace, monospace" }}>
+            web.telegram.org
+          </span>
+          , find this bot, and launch the app from there.
         </li>
-      </ul>
+      </ol>
+
+      <p className="body" style={{ marginTop: 12, opacity: 0.75 }}>
+        Once connected, your wallet stays linked to your account — you will not
+        need to do this again, and the desktop app works normally afterwards.
+      </p>
     </div>
   );
 }
@@ -462,13 +486,19 @@ function ConnectedWalletConnector({
 
   const COPY: Record<Stage, { eyebrow: string; body: string }> = {
     choose: {
-      eyebrow: "Step 1 of 2 — choose",
+      eyebrow:
+        telegramSurface() === "desktop"
+          ? "Not available here"
+          : "Step 1 of 2 — choose",
       body:
         telegramSurface() === "mobile"
           ? "Pick the wallet you already use. We never create one for you and never see your keys."
           : telegramSurface() === "web"
             ? "Scan the code with the Solana wallet on your phone, or use a browser extension if you have one."
-            : "Wallet connection is not available in the Telegram desktop app.",
+            : // The detail lives in DesktopRoutes below, which has room for two
+              // numbered routes. Repeating it here would say the same thing
+              // twice before the user reaches the part that helps.
+              "",
     },
     mismatch: {
       eyebrow: "Different wallet connected",
@@ -488,9 +518,14 @@ function ConnectedWalletConnector({
     },
   };
 
+  // No two-step sequence to show on the desktop client — there is no step one
+  // to take there. A progress bar for a flow the user cannot start is just a
+  // promise the screen does not keep.
+  const desktop = telegramSurface() === "desktop";
+
   return (
     <div className="wallet-panel">
-      <Steps stage={stage} />
+      {!(desktop && stage === "choose") && <Steps stage={stage} />}
 
       <span className="eyebrow">{COPY[stage].eyebrow}</span>
 
@@ -505,7 +540,7 @@ function ConnectedWalletConnector({
             : "No wallet yet"}
       </p>
 
-      <p className="body">{COPY[stage].body}</p>
+      {COPY[stage].body && <p className="body">{COPY[stage].body}</p>}
 
       {error && <p className="wallet-panel__error">{error}</p>}
 
