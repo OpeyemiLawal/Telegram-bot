@@ -78,12 +78,50 @@ export function getInitData(): string {
 }
 
 /**
- * True on a Telegram client that can hand a deep link to an installed wallet
- * app. Desktop and web clients cannot, so they get a QR code instead.
+ * Which of the three environments we are in, because each connects a wallet a
+ * different way and nothing else about them matters here.
+ *
+ *   mobile   Telegram's iOS/Android app. A wallet app is installed on the same
+ *            device, so deep links work and a QR would ask the user to scan
+ *            their own screen.
+ *
+ *   desktop  The installed Telegram Desktop client. Its webview has no
+ *            extensions and no wallet app to hand off to. QR is the only route.
+ *
+ *   web      Telegram in a browser tab. Extensions may be present, so the
+ *            injected-wallet path is worth trying before falling back to QR.
+ *
+ * `unknown` is grouped with desktop deliberately: QR is the option that works
+ * everywhere, so an unrecognised client should land there rather than on a
+ * deep link that may silently do nothing.
  */
-export function isMobileTelegram(): boolean {
+export type TelegramSurface = "mobile" | "desktop" | "web";
+
+export function telegramSurface(): TelegramSurface {
   const platform = webApp()?.platform ?? "unknown";
-  return platform === "android" || platform === "ios";
+
+  if (platform === "android" || platform === "ios") return "mobile";
+  // Telegram ships several web clients: "web" (K), "weba" (A), "webk".
+  if (platform.startsWith("web")) return "web";
+  return "desktop";
+}
+
+export function isMobileTelegram(): boolean {
+  return telegramSurface() === "mobile";
+}
+
+/**
+ * Whether a browser-extension wallet has injected itself.
+ *
+ * A hint, not a guarantee — Telegram's web clients frame the Mini App on a
+ * different origin, and whether a given extension injects into that frame is up
+ * to the extension. So this only decides which option is offered first; the QR
+ * path stays reachable regardless.
+ */
+export function hasInjectedSolanaWallet(): boolean {
+  if (typeof window === "undefined") return false;
+  const w = window as unknown as Record<string, unknown>;
+  return Boolean(w.solana ?? w.solflare ?? w.backpack ?? w.phantom);
 }
 
 /** Unverified. Cosmetic use only — never for authorization. */

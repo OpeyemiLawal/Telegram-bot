@@ -70,6 +70,20 @@ function telegramRedirect() {
 let initError: string | null = null;
 let started: Promise<void> | null = null;
 
+let pairingUri: string | null = null;
+const uriListeners = new Set<(uri: string) => void>();
+
+/**
+ * Subscribe to the WalletConnect pairing URI. Fires immediately if one already
+ * exists, so a component mounting mid-pairing is not left waiting for an event
+ * that has already happened.
+ */
+export function onPairingUri(fn: (uri: string) => void): () => void {
+  uriListeners.add(fn);
+  if (pairingUri) fn(pairingUri);
+  return () => uriListeners.delete(fn);
+}
+
 const METADATA = {
   name: "Solana Games",
   description: "Connect one Solana wallet to every Solana Games title.",
@@ -111,6 +125,16 @@ export function ensureWalletKit(): Promise<void> {
       const universalProvider = await UniversalProvider.init({
         projectId,
         metadata: { ...METADATA, redirect: telegramRedirect() },
+      });
+
+      // The same string the QR encodes. Captured so the Wallet screen can offer
+      // it as selectable text: Telegram frames the Mini App cross-origin and
+      // does not grant `clipboard-write` to that frame, so a copy button can
+      // fail with no feedback — which is what "the copy link button isn't
+      // working" was. Text the user can select needs no permission.
+      universalProvider.on("display_uri", (uri: string) => {
+        pairingUri = uri;
+        uriListeners.forEach((fn) => fn(uri));
       });
 
       createAppKit({

@@ -20,9 +20,17 @@ import {
   type Me,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { isMobileTelegram, notify, tap, webApp } from "@/lib/telegram";
+import {
+  hasInjectedSolanaWallet,
+  isMobileTelegram,
+  notify,
+  tap,
+  telegramSurface,
+  webApp,
+} from "@/lib/telegram";
 import {
   ensureWalletKit,
+  onPairingUri,
   walletKitConfigured,
   walletKitDiagnostics,
 } from "@/lib/wallet-kit";
@@ -83,6 +91,135 @@ function Steps({ stage }: { stage: Stage }) {
 }
 
 /**
+ * The connect buttons, which differ per surface because the three environments
+ * genuinely connect a wallet in three different ways.
+ *
+ *   mobile   One button. The wallet is on this device; deep-link straight into
+ *            it. A QR here would ask the user to scan their own screen.
+ *
+ *   web      Extension first *if one announced itself*, QR otherwise. Telegram
+ *            frames the Mini App cross-origin, so injection is not guaranteed —
+ *            hence a hint rather than a decision, with QR always reachable.
+ *
+ *   desktop  QR only. The Telegram Desktop webview has no extensions and no
+ *            wallet app to hand off to; scanning with a phone is the one path
+ *            that exists. Offering "Connect wallet" here would open a list of
+ *            wallets it cannot reach.
+ */
+function ConnectActions({
+  working,
+  launch,
+}: {
+  working: boolean;
+  launch: (view: "Connect" | "ConnectingWalletConnectBasic") => Promise<void>;
+}) {
+  const surface = telegramSurface();
+  const extension = surface === "web" && hasInjectedSolanaWallet();
+
+  if (surface === "mobile") {
+    return (
+      <button
+        className="button"
+        disabled={working}
+        onClick={() => void launch("Connect")}
+      >
+        Connect wallet
+      </button>
+    );
+  }
+
+  return (
+    <>
+      <button
+        className="button"
+        disabled={working}
+        onClick={() => void launch(extension ? "Connect" : "ConnectingWalletConnectBasic")}
+      >
+        {extension ? "Connect browser wallet" : "Show QR code"}
+      </button>
+
+      <button
+        className="button button--quiet"
+        disabled={working}
+        onClick={() => void launch(extension ? "ConnectingWalletConnectBasic" : "Connect")}
+      >
+        {extension ? "Scan QR instead" : "Choose a wallet"}
+      </button>
+    </>
+  );
+}
+
+/**
+ * The pairing link as selectable text, for when the clipboard is unavailable.
+ *
+ * Telegram frames the Mini App on a different origin and does not grant that
+ * frame `clipboard-write`, so `navigator.clipboard.writeText` rejects — and a
+ * copy button that rejects looks identical to one that did nothing. Text the
+ * user can select and copy by hand needs no permission and cannot fail.
+ *
+ * Only offered on desktop. On a phone the wallet is on the same device, so
+ * there is nothing to paste a link into.
+ */
+function PairingLink() {
+  const [uri, setUri] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => onPairingUri(setUri), []);
+
+  if (!uri) return null;
+
+  async function copy() {
+    if (!uri) return;
+    try {
+      await navigator.clipboard.writeText(uri);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Expected inside Telegram. The text below is the real answer; the
+      // button is just the shortcut for environments that allow it.
+    }
+  }
+
+  return (
+    <details className="notice" style={{ marginTop: 12 }}>
+      <summary className="body" style={{ cursor: "pointer" }}>
+        Can’t scan the code?
+      </summary>
+      <p className="body" style={{ marginTop: 10 }}>
+        Paste this into your wallet’s WalletConnect option.
+      </p>
+      <textarea
+        readOnly
+        value={uri}
+        onFocus={(e) => e.currentTarget.select()}
+        aria-label="WalletConnect pairing link"
+        style={{
+          width: "100%",
+          minHeight: 72,
+          marginTop: 8,
+          fontSize: 11,
+          fontFamily: "ui-monospace, monospace",
+          wordBreak: "break-all",
+          background: "transparent",
+          color: "inherit",
+          border: "1px solid currentColor",
+          borderRadius: 8,
+          padding: 8,
+          opacity: 0.85,
+        }}
+      />
+      <button
+        className="button button--quiet"
+        style={{ marginTop: 8 }}
+        onClick={() => void copy()}
+      >
+        {copied ? "Copied" : "Copy link"}
+      </button>
+    </details>
+  );
+}
+
+/**
  * Collapsed by default and never shown unless opened. It exists because the
  * usual way to diagnose a dead wallet button — the browser console — is not
  * reachable inside Telegram on a phone.
@@ -93,6 +230,8 @@ function Diagnostics({ lastError }: { lastError: string | null }) {
 
   const rows: [string, string][] = [
     ["Telegram platform", app?.platform ?? "not in Telegram"],
+    ["Surface", telegramSurface()],
+    ["Extension detected", hasInjectedSolanaWallet() ? "yes" : "no"],
     ["Telegram version", app?.version ?? "—"],
     ["Can open wallet apps", typeof app?.openLink === "function" ? "yes" : "no"],
     ["Reown project ID", d.projectIdHint ?? "MISSING"],
@@ -278,7 +417,9 @@ function ConnectedWalletConnector({
   const COPY: Record<Stage, { eyebrow: string; body: string }> = {
     choose: {
       eyebrow: "Step 1 of 2 — choose",
-      body: "Pick the wallet you already use. We never create one for you and never see your keys.",
+      body: isMobileTelegram()
+        ? "Pick the wallet you already use. We never create one for you and never see your keys."
+        : "Scan the code with the Solana wallet on your phone, or use a browser extension if you have one.",
     },
     mismatch: {
       eyebrow: "Different wallet connected",
@@ -324,32 +465,7 @@ function ConnectedWalletConnector({
             someone who has already linked one is the bug this replaces: their
             WalletConnect session is gone after the relaunch, but their wallet is
             still linked, and the screen should say so. */}
-        {stage === "choose" && (
-          <>
-            {/* "Connect" lists installed wallets and deep-links into the chosen
-                one, which is the whole interaction on a phone. The QR exists so
-                a *desktop* user can scan with the wallet on their phone — on
-                mobile it is noise, because the wallet is already on the device
-                doing the scanning. So it is offered on desktop only. */}
-            <button
-              className="button"
-              disabled={working}
-              onClick={() => void launch("Connect")}
-            >
-              Connect wallet
-            </button>
-
-            {!isMobileTelegram() && (
-              <button
-                className="button button--quiet"
-                disabled={working}
-                onClick={() => void launch("ConnectingWalletConnectBasic")}
-              >
-                Scan QR instead
-              </button>
-            )}
-          </>
-        )}
+        {stage === "choose" && <ConnectActions working={working} launch={launch} />}
 
         {/* Connected but unproven. The signature is requested automatically, so
             this branch is only reached while it is in flight, or after the user
@@ -417,6 +533,10 @@ function ConnectedWalletConnector({
           </>
         )}
       </div>
+
+      {/* Only while pairing, and only where a link is useful — a phone has the
+          wallet on the same device. */}
+      {!isMobileTelegram() && stage === "choose" && <PairingLink />}
 
       <Diagnostics lastError={error} />
     </div>
