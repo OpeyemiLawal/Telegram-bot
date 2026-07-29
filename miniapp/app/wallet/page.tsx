@@ -22,7 +22,6 @@ import {
 import { useAuth } from "@/lib/auth";
 import {
   hasInjectedSolanaWallet,
-  isMobileTelegram,
   notify,
   tap,
   telegramSurface,
@@ -114,38 +113,81 @@ function ConnectActions({
   launch: (view: "Connect" | "ConnectingWalletConnectBasic") => Promise<void>;
 }) {
   const surface = telegramSurface();
-  const extension = surface === "web" && hasInjectedSolanaWallet();
-
-  if (surface === "mobile") {
-    return (
-      <button
-        className="button"
-        disabled={working}
-        onClick={() => void launch("Connect")}
-      >
-        Connect wallet
-      </button>
-    );
-  }
 
   return (
     <>
+      {/* On the desktop client this is the quiet option, not the loud one. It
+          leads to a QR that cannot finish loading there, so the routes that do
+          work get the emphasis instead. */}
       <button
-        className="button"
+        className={surface === "desktop" ? "button button--quiet" : "button"}
         disabled={working}
-        onClick={() => void launch(extension ? "Connect" : "ConnectingWalletConnectBasic")}
+        onClick={() => void launch("Connect")}
       >
-        {extension ? "Connect browser wallet" : "Show QR code"}
+        {surface === "desktop" ? "Try connecting anyway" : "Connect wallet"}
       </button>
 
-      <button
-        className="button button--quiet"
-        disabled={working}
-        onClick={() => void launch(extension ? "ConnectingWalletConnectBasic" : "Connect")}
-      >
-        {extension ? "Scan QR instead" : "Choose a wallet"}
-      </button>
+      {/* Jumping straight to the QR view is available but not the default.
+          AppKit's own Connect view already branches on desktop vs mobile and is
+          the path its maintainers test; forcing an inner view means owning that
+          decision ourselves and inheriting every edge case that comes with it.
+          Kept as an explicit escape for when the default lands somewhere the
+          user did not want. */}
+      {surface === "web" && (
+        <button
+          className="button button--quiet"
+          disabled={working}
+          onClick={() => void launch("ConnectingWalletConnectBasic")}
+        >
+          Show QR code
+        </button>
+      )}
     </>
+  );
+}
+
+/**
+ * What the Telegram Desktop client gets instead of a QR code.
+ *
+ * The QR never renders there, and the reason is upstream of anything this app
+ * controls: generating the code requires a WalletConnect relay socket, and the
+ * Telegram Desktop webview does not complete that connection. The same build
+ * pairs fine from Telegram on a phone and from Telegram in a browser, which is
+ * what rules out our CSP, our project id and our provider setup.
+ *
+ * A spinner that will never resolve is the worst possible answer to that. It
+ * reads as "still working, keep waiting", and the user has no way to learn
+ * otherwise. Two routes that do work is a better answer than one that does not.
+ *
+ * The QR is still reachable below, deliberately: if a future Telegram Desktop
+ * build fixes the socket, nothing here has to change for it to start working.
+ */
+function DesktopRoutes() {
+  const link = process.env.NEXT_PUBLIC_TELEGRAM_RETURN_URL;
+
+  return (
+    <div className="notice" style={{ marginTop: 12 }}>
+      <p className="body">
+        <strong>Connecting a wallet needs your phone or a browser.</strong> The
+        Telegram desktop app cannot reach the wallet network, so the QR code
+        never finishes loading.
+      </p>
+      <ul className="body" style={{ margin: "10px 0 0", paddingLeft: 18 }}>
+        <li>
+          Open this bot on your phone — two taps, nothing to scan.
+          {link ? (
+            <>
+              {" "}
+              <code style={{ wordBreak: "break-all" }}>{link}</code>
+            </>
+          ) : null}
+        </li>
+        <li style={{ marginTop: 6 }}>
+          Or open Telegram at <code>web.telegram.org</code> in your browser and
+          launch this app there.
+        </li>
+      </ul>
+    </div>
   );
 }
 
@@ -417,9 +459,12 @@ function ConnectedWalletConnector({
   const COPY: Record<Stage, { eyebrow: string; body: string }> = {
     choose: {
       eyebrow: "Step 1 of 2 — choose",
-      body: isMobileTelegram()
-        ? "Pick the wallet you already use. We never create one for you and never see your keys."
-        : "Scan the code with the Solana wallet on your phone, or use a browser extension if you have one.",
+      body:
+        telegramSurface() === "mobile"
+          ? "Pick the wallet you already use. We never create one for you and never see your keys."
+          : telegramSurface() === "web"
+            ? "Scan the code with the Solana wallet on your phone, or use a browser extension if you have one."
+            : "Wallet connection is not available in the Telegram desktop app.",
     },
     mismatch: {
       eyebrow: "Different wallet connected",
@@ -536,7 +581,12 @@ function ConnectedWalletConnector({
 
       {/* Only while pairing, and only where a link is useful — a phone has the
           wallet on the same device. */}
-      {!isMobileTelegram() && stage === "choose" && <PairingLink />}
+      {stage === "choose" && telegramSurface() === "desktop" && <DesktopRoutes />}
+
+      {/* Only where a pairing link can actually be produced and is useful: the
+          browser clients. The desktop app never emits one, and on a phone the
+          wallet is on the same device. */}
+      {stage === "choose" && telegramSurface() === "web" && <PairingLink />}
 
       <Diagnostics lastError={error} />
     </div>
