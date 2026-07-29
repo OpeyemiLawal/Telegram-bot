@@ -47,12 +47,17 @@ services:
           name: sga-db
           property: connectionString
 
-      # Render generates a 256-bit random value for each. Both must be 32+
-      # characters or the app refuses to start.
+      # Only ever read by our own HS256 signing, so any charset is fine here.
       - key: JWT_SECRET
         generateValue: true
+
+      # NOT generateValue. Telegram's `secret_token` accepts only A-Z, a-z,
+      # 0-9, `_` and `-`; Render generates base64, whose `+`, `/` and `=` are
+      # rejected by setWebhook at boot. Generate it yourself with
+      #   python -c "import secrets; print(secrets.token_urlsafe(32))"
+      # which emits precisely the allowed alphabet.
       - key: WEBHOOK_SECRET
-        generateValue: true
+        sync: false
 
       # Prompted at deploy time. Never stored in git.
       - key: BOT_TOKEN

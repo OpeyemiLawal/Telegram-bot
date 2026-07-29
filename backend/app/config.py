@@ -58,6 +58,31 @@ class Settings(BaseSettings):
             )
         return value
 
+    @field_validator("webhook_secret")
+    @classmethod
+    def _telegram_safe(cls, value: str) -> str:
+        """Reject a secret Telegram will not accept.
+
+        `setWebhook` limits `secret_token` to 1-256 characters drawn from
+        A-Z, a-z, 0-9, `_` and `-`. Base64 output is a natural thing to reach
+        for and is *not* valid here: `+`, `/` and `=` are all rejected. Render's
+        `generateValue`, and most "generate a secret" buttons, produce exactly
+        that.
+
+        Without this check the failure surfaces as a TelegramBadRequest thrown
+        from inside the lifespan handler on boot — a stack trace fifteen frames
+        deep in aiogram that names neither this setting nor the offending
+        character. `secrets.token_urlsafe()` already emits the correct alphabet.
+        """
+        if not re.fullmatch(r"[A-Za-z0-9_-]{32,256}", value):
+            raise ValueError(
+                "WEBHOOK_SECRET may contain only letters, digits, '_' and '-' "
+                "(Telegram's rule for secret_token). Base64 values are rejected "
+                "because of '+', '/' and '='. Generate a valid one with "
+                "python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+            )
+        return value
+
     @field_validator("database_url")
     @classmethod
     def _async_driver(cls, value: str) -> str:
