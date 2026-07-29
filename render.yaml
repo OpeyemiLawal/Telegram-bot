@@ -1,0 +1,70 @@
+# Render Blueprint — creates the API service and its Postgres in one shot.
+#
+#   Render Dashboard → New → Blueprint → pick this repo.
+#
+# Three variables are marked `sync: false`, which means Render will prompt you
+# for them at deploy time instead of storing them here. That is deliberate:
+# BOT_TOKEN is the HMAC key for initData validation, and it must never be
+# committed to a repository.
+
+databases:
+  - name: sga-db
+    plan: free
+    databaseName: sga
+    user: sga
+
+services:
+  - type: web
+    name: sga-api
+    runtime: python
+    plan: free
+    rootDir: backend
+
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+
+    # One worker only. `ReplayGuard` in app/security/telegram_auth.py is an
+    # in-memory dict, so a second worker would have its own copy and a replayed
+    # initData could land on the process that has not seen it. Move the guard
+    # to Redis before raising this.
+    healthCheckPath: /health
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.4"
+
+      # Wired automatically from the database above. config.py rewrites the
+      # postgresql:// prefix to postgresql+asyncpg:// on load.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sga-db
+          property: connectionString
+
+      # Render generates a 256-bit random value for each. Both must be 32+
+      # characters or the app refuses to start.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: WEBHOOK_SECRET
+        generateValue: true
+
+      # Prompted at deploy time. Never stored in git.
+      - key: BOT_TOKEN
+        sync: false
+      - key: MINIAPP_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+
+      # Must match this service's real URL exactly — it is what gets registered
+      # with Telegram as the webhook. If you rename the service, change this.
+      - key: PUBLIC_API_URL
+        value: https://sga-api.onrender.com
+
+      - key: ENVIRONMENT
+        value: production
+      - key: INITDATA_MAX_AGE
+        value: "300"
+
+      # Off in production. The capture file contains a real user profile.
+      - key: DEBUG_AUTH
+        value: "0"

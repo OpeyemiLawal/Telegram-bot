@@ -1,0 +1,360 @@
+@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@400;500;700&display=swap");
+
+/*
+  Palette: an arcade token, not a trading terminal.
+  Petrol-ink ground so it reads as a cabinet interior rather than a void,
+  brass as the only warm accent (the coin), mint reserved exclusively for
+  numbers that represent money the player has.
+*/
+:root {
+  --ink: #0b1620;
+  --ink-raised: #12212d;
+  --ink-sunk: #081018;
+  --rule: #1b2e3c;
+
+  --brass: #c89b3c;
+  --brass-deep: #8a6b26;
+  --mint: #7fd4b0;
+  --alert: #e0674f;
+
+  --bone: #e8e4da;
+  --slate: #7a8c99;
+
+  --display: "Bricolage Grotesque", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+  --body: system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --gap: 16px;
+  --radius: 14px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  background: var(--ink);
+  color: var(--bone);
+  font-family: var(--body);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+body {
+  min-height: 100dvh;
+  padding: 0 var(--gap) 40px;
+  max-width: 560px;
+  margin-inline: auto;
+}
+
+/* ---------- type ---------- */
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--slate);
+}
+
+.display {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(28px, 9vw, 40px);
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+}
+
+.heading {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 19px;
+  letter-spacing: -0.015em;
+}
+
+.body {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--slate);
+}
+
+.mono {
+  font-family: var(--mono);
+  font-variant-ligatures: none;
+}
+
+/* ---------- shell chrome ---------- */
+
+.masthead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 22px 0 18px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+
+.masthead__mark {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+}
+
+.masthead__mark span {
+  color: var(--brass);
+}
+
+/* ---------- signature: the player card ---------- */
+/*
+  One object the player carries between every cabinet. The brass edge is a
+  slow sweep, not a pulse — it should feel like light moving across metal.
+*/
+.card {
+  position: relative;
+  border-radius: var(--radius);
+  padding: 1px; /* the foil edge */
+  background: linear-gradient(
+    115deg,
+    var(--brass-deep) 0%,
+    var(--brass) 18%,
+    #f2dda4 26%,
+    var(--brass) 34%,
+    var(--brass-deep) 55%,
+    var(--brass-deep) 100%
+  );
+  background-size: 300% 100%;
+  animation: foil 9s linear infinite;
+}
+
+@keyframes foil {
+  to {
+    background-position: -300% 0;
+  }
+}
+
+.card__face {
+  border-radius: calc(var(--radius) - 1px);
+  background: var(--ink-raised);
+  padding: 20px 18px 18px;
+}
+
+.card__label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.card__address {
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: var(--bone);
+  word-break: break-all;
+}
+
+.card__balances {
+  display: flex;
+  gap: 28px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+}
+
+.card__amount {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--mint);
+  font-variant-numeric: tabular-nums;
+}
+
+.card__amount--idle {
+  color: var(--slate);
+}
+
+.card__denom {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--slate);
+  display: block;
+  margin-top: 7px;
+}
+
+/* ---------- lists and tiles ---------- */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 28px;
+}
+
+.tile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  background: var(--ink-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 18px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    border-color 140ms ease,
+    transform 140ms ease;
+}
+
+.tile:active {
+  transform: scale(0.985);
+}
+
+.tile:hover:not(:disabled) {
+  border-color: var(--brass-deep);
+}
+
+.tile:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.tile__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.tile__chevron {
+  color: var(--brass);
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.tile__pip {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.badge {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--slate);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 4px 8px;
+}
+
+/* ---------- states ---------- */
+
+.state {
+  padding: 72px 8px;
+  text-align: center;
+}
+
+.state .heading {
+  margin-bottom: 10px;
+}
+
+.state .body {
+  max-width: 34ch;
+  margin-inline: auto;
+}
+
+.button {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 15px;
+  background: var(--brass);
+  color: var(--ink-sunk);
+  border: none;
+  border-radius: 10px;
+  padding: 13px 22px;
+  margin-top: 22px;
+  cursor: pointer;
+}
+
+.button--quiet {
+  background: transparent;
+  color: var(--slate);
+  border: 1px solid var(--rule);
+}
+
+.notice {
+  border-left: 2px solid var(--brass-deep);
+  padding: 2px 0 2px 14px;
+  margin-top: 26px;
+}
+
+.skeleton {
+  background: var(--ink-raised);
+  border-radius: var(--radius);
+  animation: breathe 1.4s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--brass);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ---------- external wallet connection ---------- */
+
+.wallet-panel {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--ink-raised);
+}
+
+.wallet-panel__address {
+  margin: 9px 0 8px;
+  font-family: var(--mono);
+  font-size: 16px;
+  color: var(--bone);
+  overflow-wrap: anywhere;
+}
+
+.wallet-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.wallet-panel__actions .button {
+  margin-top: 0;
+}
+
+.wallet-panel__error {
+  margin-top: 12px;
+  color: var(--alert);
+  font-size: 13px;
+  line-height: 1.4;
+}

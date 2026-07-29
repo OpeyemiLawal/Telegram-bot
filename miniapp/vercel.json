@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Frame-Options", "value": "ALLOWALL" }
+      ]
+    }
+  ],
+  "_comment_coop_coep": "When you add the Godot game host in the next slice, DO NOT set Cross-Origin-Opener-Policy or Cross-Origin-Embedder-Policy here. Export Godot single-threaded instead. Cross-origin isolation breaks the embedded wallet provider's iframes and third-party RPC calls."
+}

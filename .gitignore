@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.db
+.env
+.env.local
+
+node_modules/
+.next/
+out/
+next-env.d.ts
+.vercel
+.DS_Store
+last_initdata.txt

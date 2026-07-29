@@ -1,0 +1,18 @@
+# Verified together on a clean venv. If you change one pin, reinstall from
+# scratch and re-run `pytest -q` — aiogram in particular is strict about the
+# pydantic range it accepts, and a mismatch fails at install time, not runtime.
+aiogram==3.30.0
+fastapi==0.140.7
+uvicorn[standard]==0.51.0
+pydantic==2.13.4
+pydantic-settings==2.14.2
+sqlalchemy[asyncio]==2.0.51
+asyncpg==0.31.0
+aiosqlite==0.22.1
+pyjwt==2.13.0
+pynacl==1.5.0
+httpx==0.28.1
+python-multipart==0.0.32
+
+# Test-only, but kept here so `pytest -q` works after a single install.
+pytest==9.1.1
