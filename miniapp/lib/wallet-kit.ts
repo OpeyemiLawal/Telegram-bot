@@ -43,6 +43,12 @@ export const walletKitConfigured = Boolean(projectId);
  */
 const returnUrl = process.env.NEXT_PUBLIC_TELEGRAM_RETURN_URL?.trim();
 
+/** Comma-separated WalletConnect explorer ids. Empty means "AppKit decides". */
+const walletIds = (process.env.NEXT_PUBLIC_WALLET_IDS ?? "")
+  .split(",")
+  .map((id) => id.trim())
+  .filter(Boolean);
+
 function telegramRedirect() {
   if (!returnUrl) return undefined;
 
@@ -144,6 +150,28 @@ export function ensureWalletKit(): Promise<void> {
         projectId,
         metadata: METADATA,
         universalProvider,
+
+        // Removes the "All wallets (600+)" browse button.
+        //
+        // That list is the right default for a general dapp and the wrong one
+        // here: this is a Solana-only app, so most of what it offers cannot
+        // connect at all, and a user who picks one gets a dead end rather than
+        // an explanation. Hiding it costs nothing — every wallet worth showing
+        // is in the list below.
+        allWallets: "HIDE",
+
+        // A strict allowlist when configured, otherwise AppKit's own defaults.
+        //
+        // Left unset the modal advertises its recommended wallets whether or
+        // not they are installed, which on desktop means most of the list is
+        // aspirational. Naming the wallets this app actually supports turns the
+        // chooser into a short, honest menu.
+        //
+        // Values are WalletConnect explorer ids — see .env.example for how to
+        // look them up. Deliberately configuration rather than a constant: a
+        // wrong id fails silently by showing nothing, so it belongs somewhere
+        // it can be corrected without a code change.
+        ...(walletIds.length ? { includeWalletIds: walletIds } : {}),
         features: {
           analytics: false,
           email: false,
