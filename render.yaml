@@ -18,10 +18,17 @@ services:
     name: sga-api
     runtime: python
     plan: free
-    rootDir: backend
 
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    # Both commands are written relative to the repository root and do their own
+    # directory changes. `rootDir: backend` would be the tidier way to say this,
+    # but it is not reliably applied to an already-created service, which fails
+    # as a confusing "requirements.txt not found in /opt/render/project/src".
+    # Being explicit costs one `cd` and removes the ambiguity entirely.
+    #
+    # The `cd` in startCommand is load-bearing: uvicorn resolves `app.main` from
+    # the current working directory, so it must run inside backend/.
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
 
     # One worker only. `ReplayGuard` in app/security/telegram_auth.py is an
     # in-memory dict, so a second worker would have its own copy and a replayed
