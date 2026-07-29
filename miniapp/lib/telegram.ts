@@ -19,8 +19,24 @@ interface TelegramWebApp {
     };
   };
   version: string;
+  platform: string;
   colorScheme: "light" | "dark";
   isExpanded: boolean;
+
+  /**
+   * Opens an http(s) URL outside the WebView. This is the only way to reach a
+   * wallet app from inside Telegram — `window.open` is blocked on mobile and a
+   * plain navigation destroys the WebApp JS context along with the pending
+   * WalletConnect session.
+   */
+  openLink?(
+    url: string,
+    options?: { try_instant_view?: boolean; try_browser?: string },
+  ): void;
+
+  /** For `tg://` and `https://t.me/...` only. Stays inside Telegram. */
+  openTelegramLink?(url: string): void;
+
   ready(): void;
   expand(): void;
   close(): void;
@@ -59,6 +75,15 @@ export function isInsideTelegram(): boolean {
 /** The signed blob. Only ever send this to our own API over HTTPS. */
 export function getInitData(): string {
   return webApp()?.initData ?? "";
+}
+
+/**
+ * True on a Telegram client that can hand a deep link to an installed wallet
+ * app. Desktop and web clients cannot, so they get a QR code instead.
+ */
+export function isMobileTelegram(): boolean {
+  const platform = webApp()?.platform ?? "unknown";
+  return platform === "android" || platform === "ios";
 }
 
 /** Unverified. Cosmetic use only — never for authorization. */

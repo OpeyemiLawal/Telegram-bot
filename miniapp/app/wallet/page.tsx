@@ -19,7 +19,7 @@ import {
   type Me,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { notify, tap } from "@/lib/telegram";
+import { isMobileTelegram, notify, tap } from "@/lib/telegram";
 import { walletKitConfigured } from "@/lib/wallet-kit";
 
 function shortAddress(address: string): string {
@@ -129,16 +129,42 @@ function ConnectedWalletConnector({
 
       <div className="wallet-panel__actions">
         {!isConnected && (
-          <button
-            className="button"
-            disabled={working}
-            onClick={() => {
-              tap();
-              void open({ view: "Connect", namespace: "solana" });
-            }}
-          >
-            Connect wallet
-          </button>
+          <>
+            <button
+              className="button"
+              disabled={working}
+              onClick={() => {
+                tap();
+                // On a phone this lists installed wallets and deep-links out to
+                // the chosen one. On Telegram Desktop or Web there is nothing to
+                // deep-link into, so we skip the list and go straight to the QR.
+                void open(
+                  isMobileTelegram()
+                    ? { view: "Connect", namespace: "solana" }
+                    : { view: "ConnectingWalletConnectBasic", namespace: "solana" },
+                );
+              }}
+            >
+              {isMobileTelegram() ? "Connect wallet" : "Connect wallet (QR)"}
+            </button>
+
+            {/* The inverse of whatever the primary button does, so both paths
+                are always one tap away and neither is a dead end. */}
+            <button
+              className="button button--quiet"
+              disabled={working}
+              onClick={() => {
+                tap();
+                void open(
+                  isMobileTelegram()
+                    ? { view: "ConnectingWalletConnectBasic", namespace: "solana" }
+                    : { view: "Connect", namespace: "solana" },
+                );
+              }}
+            >
+              {isMobileTelegram() ? "Scan QR instead" : "Choose a wallet"}
+            </button>
+          </>
         )}
 
         {isConnected && !verified && (

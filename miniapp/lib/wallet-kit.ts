@@ -4,6 +4,13 @@ import { createAppKit } from "@reown/appkit/react";
 import { SolanaAdapter } from "@reown/appkit-adapter-solana/react";
 import { solana } from "@reown/appkit/networks";
 
+import { routeWalletLinksThroughTelegram } from "./telegram-links";
+
+// Must run before createAppKit. AppKit captures no reference to window.open at
+// construction time, but installing the patch first removes any ordering
+// question and guarantees the very first connection attempt is already routed.
+routeWalletLinksThroughTelegram();
+
 const projectId = process.env.NEXT_PUBLIC_REOWN_PROJECT_ID;
 const configuredAppUrl =
   process.env.NEXT_PUBLIC_MINIAPP_URL ?? "https://solanagames.app";
