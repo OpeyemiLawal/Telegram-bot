@@ -84,8 +84,8 @@ git push -u origin main
 
    | Name | Value |
    |---|---|
-   | `NEXT_PUBLIC_API_URL` | `https://sga-api.onrender.com` |
-   | `NEXT_PUBLIC_MINIAPP_URL` | `https://sga.vercel.app` |
+   | `NEXT_PUBLIC_API_URL` | `https://sga-api-v924.onrender.com` |
+   | `NEXT_PUBLIC_MINIAPP_URL` | `https://sga-miniapp.vercel.app` |
    | `NEXT_PUBLIC_REOWN_PROJECT_ID` | *(see below)* |
 
    The first two are educated guesses at the URLs you are about to get. If
@@ -96,7 +96,7 @@ git push -u origin main
    Project ID. Without it the wallet button will not open anything.
 
 5. **Deploy**. Wait for the build, then **copy the domain it gives you** — most
-   likely `https://sga.vercel.app`. You need it in the next step, exactly as
+   likely `https://sga-miniapp.vercel.app`. You need it in the next step, exactly as
    shown, with no trailing slash.
 
 ---
@@ -124,7 +124,7 @@ and its Postgres database in one action.
 
 4. **Apply**. First build takes 3–5 minutes.
 5. When it goes live, check the service URL at the top of the page. If it is
-   **not** `https://sga-api.onrender.com`, go to **Environment** → edit
+   **not** `https://sga-api-v924.onrender.com`, go to **Environment** → edit
    `PUBLIC_API_URL` to the real one → save. The service redeploys.
 
    This one matters more than it looks: `PUBLIC_API_URL` is what gets registered
@@ -133,7 +133,7 @@ and its Postgres database in one action.
 
 ### Confirm it came up
 
-Open `https://sga-api.onrender.com/health` in a browser. You want:
+Open `https://sga-api-v924.onrender.com/health` in a browser. You want:
 
 ```json
 {"status": "ok"}
@@ -142,7 +142,7 @@ Open `https://sga-api.onrender.com/health` in a browser. You want:
 Then in Render → **Logs**, look for:
 
 ```
-Webhook registered at https://sga-api.onrender.com/webhook/telegram
+Webhook registered at https://sga-api-v924.onrender.com/webhook/telegram
 ```
 
 That line means Telegram accepted the registration. If it is missing, the token
@@ -193,7 +193,7 @@ Two ways out:
 - **$7/mo** — Render → `sga-api` → **Settings** → **Instance Type** →
   **Starter**. No sleeping. This is the real fix.
 - **Free** — [uptimerobot.com](https://uptimerobot.com), add an HTTPS monitor on
-  `https://sga-api.onrender.com/health` every 5 minutes. Keeps it awake. Render
+  `https://sga-api-v924.onrender.com/health` every 5 minutes. Keeps it awake. Render
   permits this; it also means the service is never idle, so you burn instance
   hours faster.
 

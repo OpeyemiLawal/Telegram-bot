@@ -69,8 +69,14 @@ services:
 
       # Must match this service's real URL exactly — it is what gets registered
       # with Telegram as the webhook. If you rename the service, change this.
+      #
+      # Note the `-v924` suffix. onrender.com subdomains are globally unique, so
+      # Render appended it when it found `sga-api` already taken. Telegram will
+      # accept a webhook registration pointing anywhere, including a domain
+      # belonging to someone else, so a stale value here fails silently: the
+      # startup log reads "Webhook registered" and the bot never responds.
       - key: PUBLIC_API_URL
-        value: https://sga-api.onrender.com
+        value: https://sga-api-v924.onrender.com
 
       - key: ENVIRONMENT
         value: production
