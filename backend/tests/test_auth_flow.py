@@ -85,11 +85,29 @@ def test_forged_init_data_is_rejected(client):
     assert res.status_code == 401
 
 
-def test_same_init_data_cannot_be_replayed(client):
+def test_replayed_init_data_returns_a_fresh_session_for_the_same_user(client):
+    """A relaunch must not strand the user.
+
+    Telegram reuses the same initData every time it relaunches a Mini App, and
+    it relaunches whenever the user comes back from another app — the wallet
+    approval round trip being the case that matters. So a second redemption is
+    ordinary behaviour, not an attack, and has to succeed.
+
+    What must still hold is that it resolves to the *same* account and issues
+    genuinely new tokens rather than handing back the old ones.
+    """
     raw = build_init_data(user={"id": 555002, "first_name": "Alan"})
-    assert client.post("/api/auth/telegram", json={"init_data": raw}).status_code == 200
+
+    first = client.post("/api/auth/telegram", json={"init_data": raw})
+    assert first.status_code == 200
+
     second = client.post("/api/auth/telegram", json={"init_data": raw})
-    assert second.status_code == 401
+    assert second.status_code == 200
+
+    assert second.json()["user"]["telegram_id"] == first.json()["user"]["telegram_id"]
+    assert second.json()["user"]["id"] == first.json()["user"]["id"]
+    assert second.json()["refresh_token"] != first.json()["refresh_token"]
+    assert second.json()["access_token"] != first.json()["access_token"]
 
 
 def test_refresh_rotates_and_old_token_dies(client):

@@ -128,9 +128,28 @@ async def login_with_telegram(
         ) from exc
 
     if _replay_guard.seen(data.hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="This session was already used. Reopen the app.",
+        # Observed, recorded, and deliberately not fatal.
+        #
+        # Telegram hands the same initData back every time it relaunches a Mini
+        # App, and it relaunches on every return from another app — which is
+        # precisely what linking a wallet requires: Telegram → wallet → approve
+        # → back. The client tries its refresh token first to avoid this, but a
+        # relaunch can discard sessionStorage, leaving the launch payload as the
+        # only credential the app still holds. Rejecting it strands the user
+        # mid-flow with an error they cannot act on; "reopen the app" produces
+        # the very same string again.
+        #
+        # What is actually given up is small. The signature still has to verify
+        # against the bot token, auth_date still has to be inside the window,
+        # and the string only ever travels over HTTPS to this origin. A second
+        # redemption yields the same user a fresh session — the same thing an
+        # honest relaunch asks for.
+        #
+        # This log line is the signal worth watching: a burst of repeats for one
+        # telegram_id from changing IPs is what a leaked payload looks like.
+        logger.info(
+            "initData replayed for telegram_id=%s — issuing a new session",
+            data.user.id,
         )
 
     tg = data.user
