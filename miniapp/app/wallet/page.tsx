@@ -222,13 +222,17 @@ function PairingLink() {
     }
   }
 
+  const mobile = telegramSurface() === "mobile";
+
   return (
     <details className="notice" style={{ marginTop: 12 }}>
       <summary className="body" style={{ cursor: "pointer" }}>
-        Can’t scan the code?
+        {mobile ? "Wallet not listed?" : "Can’t scan the code?"}
       </summary>
       <p className="body" style={{ marginTop: 10 }}>
-        Paste this into your wallet’s WalletConnect option.
+        {mobile
+          ? "Copy this link, open your wallet, and use its WalletConnect or Scan option to paste it."
+          : "Paste this into your wallet’s WalletConnect option."}
       </p>
       <textarea
         readOnly
@@ -583,10 +587,16 @@ function ConnectedWalletConnector({
           wallet on the same device. */}
       {stage === "choose" && telegramSurface() === "desktop" && <DesktopRoutes />}
 
-      {/* Only where a pairing link can actually be produced and is useful: the
-          browser clients. The desktop app never emits one, and on a phone the
-          wallet is on the same device. */}
-      {stage === "choose" && telegramSurface() === "web" && <PairingLink />}
+      {/* Shown on mobile as well as web, and it is not redundant there.
+          The curated list is short by design, so a player whose wallet is not
+          on it would otherwise have no route at all — they cannot scan a code
+          on the screen they are holding. Copying the pairing link and pasting
+          it into their own wallet is the one path that always exists.
+
+          `PairingLink` renders nothing until a URI has actually been emitted,
+          so this stays invisible until the user has started a connection and
+          the escape hatch is genuinely available. */}
+      {stage === "choose" && telegramSurface() !== "desktop" && <PairingLink />}
 
       <Diagnostics lastError={error} />
     </div>
