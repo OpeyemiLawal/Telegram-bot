@@ -182,24 +182,82 @@ your player card and is now on `User.wallet_address` in Postgres.
 which takes 30–60 seconds. What that looks like in practice: you open the Mini
 App after a quiet hour and it sits on the loading skeleton, then works.
 
-Worse, it interacts with a rule you cannot change. `initData` is rejected once it
-is older than `INITDATA_MAX_AGE` (300s). A cold start burns up to 60 of those
-seconds. You are still well inside the window, but if you also raise the sleep
-threshold or the user leaves the app open, the two can collide and login fails
-with "Reopen the app."
-
-Two ways out:
-
-- **$7/mo** — Render → `sga-api` → **Settings** → **Instance Type** →
-  **Starter**. No sleeping. This is the real fix.
-- **Free** — [uptimerobot.com](https://uptimerobot.com), add an HTTPS monitor on
-  `https://sga-api-v924.onrender.com/health` every 5 minutes. Keeps it awake. Render
-  permits this; it also means the service is never idle, so you burn instance
-  hours faster.
+A cold start also eats into the `INITDATA_MAX_AGE` window. That window is now 24
+hours rather than 300 seconds, so the two no longer collide — but a minute of
+apparent silence still reads as a broken app.
 
 **Also: the free Postgres expires 30 days after creation.** Render emails you.
 When it does, either upgrade the database or export and recreate — otherwise you
 lose every user row and every linked wallet.
+
+---
+
+## Uptime monitoring
+
+Two reasons to do this, and the second is the one that matters more.
+
+The obvious one: the free instance sleeps, so the first request after an idle
+period waits 30–60 seconds. A monitor hitting `/health` every five minutes keeps
+it warm and that pause disappears.
+
+The one people skip: **without a monitor, you learn the API is down from a user.**
+`/health` reports the running commit, so an alert also tells you whether a deploy
+landed.
+
+**Set it up** — [uptimerobot.com](https://uptimerobot.com), free tier:
+
+1. **Add New Monitor** → type **HTTPS**
+2. URL: `https://sga-api-v924.onrender.com/health`
+3. Interval: **5 minutes**
+4. Add your email under **Alert Contacts**
+5. Save
+
+Optional but worth it: under **Advanced**, set **Keyword** to `"status":"ok"`.
+Without it a monitor only checks that *something* answered — a 500 page with a
+200 status would pass. With it, the check fails when the response stops being the
+one you expect.
+
+**What you give up:** the instance is never idle, so free instance-hours burn
+faster. Render permits this; if you outgrow the free tier, **Settings** →
+**Instance Type** → **Starter** at $7/mo removes sleeping entirely and is the
+real fix.
+
+**Verify by hand any time:**
+
+```bash
+curl https://sga-api-v924.onrender.com/health
+# {"status":"ok","commit":"d55a209","environment":"production","initdata_max_age":"86400"}
+```
+
+Compare `commit` against `git rev-parse --short HEAD`. If they differ, Render is
+serving a stale build — which looks exactly like a fix that did not work.
+
+---
+
+## Dependency advisories
+
+Run both before any release that touches dependencies:
+
+```bash
+cd miniapp && npm audit
+cd ../backend && .venv/Scripts/python.exe -m pip list --outdated
+```
+
+`npm audit` on a Next + WalletConnect tree will report findings. Triage rather
+than reflexively running `npm audit fix`:
+
+- **Is it reachable from our code?** A transitive advisory in a build-time tool
+  cannot be exploited by a Mini App user. One in a runtime dependency can.
+- **Does `--force` upgrade a major version?** `npm audit fix --force` will happily
+  break your build to clear a low-severity finding in a package you never call.
+- **Are the AppKit versions pinned?** They are exact, not `^`, so
+  `@walletconnect/universal-provider` stays on the version AppKit expects. Two
+  copies of that library fight over one session. Re-pin deliberately, not via a
+  fix command.
+
+Record what you decided and why. An advisory you assessed and accepted is a
+different thing from one you never saw, and six months later only a note tells
+them apart.
 
 ---
 
@@ -228,17 +286,55 @@ Both Render and Vercel watch `main` and rebuild on push. Nothing else to do.
 
 ---
 
+## Schema changes
+
+Production schema is Alembic's, applied by the start command
+(`alembic upgrade head && uvicorn ...`) before the app process exists. A failed
+migration stops the release rather than starting an app against a schema it does
+not match.
+
+`create_all` still exists and is still correct — for tests and local work, which
+want a schema built and dropped per run. It now **raises** if
+`ENVIRONMENT=production`, because the two mechanisms disagreeing is the failure
+worth preventing: `create_all` never alters an existing table, so a model change
+would appear to succeed against a fresh database and do nothing at all to the
+deployed one, silently either way.
+
+**After changing a model:**
+
+```bash
+cd backend
+.venv/Scripts/python.exe -m alembic revision --autogenerate -m "what changed"
+```
+
+**Read the generated file before committing it.** Autogenerate is good at columns
+and indexes and blind to intent — it cannot see that a rename is a rename, so it
+proposes a drop and an add, which is data loss that passes review if nobody looks.
+
+```bash
+.venv/Scripts/python.exe -m alembic upgrade head   # apply locally
+.venv/Scripts/python.exe -m pytest -q              # confirm nothing broke
+```
+
+Push, and Render applies it on the next deploy.
+
+---
+
 ## Before real money touches this
 
-Deploying does not change what is in the original README's final section. Still
-open, in rough priority order:
+Done since the first draft of this document:
 
-1. **Alembic migrations.** `create_all` builds the schema on first boot and then
-   never touches it again. Your next model change will not appear in Postgres,
-   and nothing will tell you.
-2. **Redis replay guard.** `ReplayGuard` is per-process, which is why this is
-   pinned to one worker. It caps your throughput.
-3. **Rate limiting on `/api/auth/telegram`.** It is unauthenticated by
-   definition and does an HMAC per call.
-4. **Structured logging with `BOT_TOKEN` scrubbed.** Render retains logs.
-5. **An audit of the on-chain program**, which is not written yet.
+- ~~Alembic migrations~~ — `migrations/`, applied at start
+- ~~Rate limiting on `/api/auth/telegram`~~ — `app/security/rate_limit.py`
+- ~~Structured logging with `BOT_TOKEN` scrubbed~~ — `app/security/log_scrub.py`
+
+Still open, in rough priority order:
+
+1. **Redis replay guard and rate limiter.** Both are per-process dicts, which is
+   why this is pinned to one worker — and that pin is now the throughput ceiling.
+   `ReplayGuard.seen()` and `FixedWindowLimiter.check()` each carry the Redis
+   equivalent in a comment.
+2. **An audit of the on-chain program**, which is not written yet. Nothing in
+   this repo custodies funds, and nothing here should until that is done.
+3. **Fold `bot_menu_messages` into `users`.** It is a separate table only because
+   `create_all` could not have added a column. Alembic can, so the reason is gone.

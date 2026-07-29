@@ -14,6 +14,7 @@ from app.config import Settings, get_settings
 from app.db import get_session
 from app.models import RefreshToken, User
 from app.security import debug_capture
+from app.security.rate_limit import login_limiter, rate_limit
 from app.security.telegram_auth import (
     InitDataError,
     ReplayGuard,
@@ -99,7 +100,11 @@ async def _issue_pair(
     )
 
 
-@router.post("/telegram", response_model=TokenPair)
+@router.post(
+    "/telegram",
+    response_model=TokenPair,
+    dependencies=[Depends(rate_limit(login_limiter))],
+)
 async def login_with_telegram(
     body: LoginRequest,
     session: AsyncSession = Depends(get_session),
@@ -179,7 +184,11 @@ async def login_with_telegram(
     return await _issue_pair(session, user, settings)
 
 
-@router.post("/refresh", response_model=TokenPair)
+@router.post(
+    "/refresh",
+    response_model=TokenPair,
+    dependencies=[Depends(rate_limit(login_limiter))],
+)
 async def rotate_refresh_token(
     body: RefreshRequest,
     session: AsyncSession = Depends(get_session),

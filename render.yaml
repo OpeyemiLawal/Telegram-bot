@@ -28,7 +28,16 @@ services:
     # The `cd` in startCommand is load-bearing: uvicorn resolves `app.main` from
     # the current working directory, so it must run inside backend/.
     buildCommand: pip install -r backend/requirements.txt
-    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+
+    # Migrations run here rather than in buildCommand or in the app's lifespan.
+    #
+    # Not the build, because Render's build step cannot reach the internal
+    # database URL. Not the lifespan, because that puts schema changes inside
+    # every worker's startup — fine at one worker, a race at two.
+    #
+    # The `&&` matters: a failed migration must stop the release rather than
+    # start an app against a schema it does not match.
+    startCommand: cd backend && alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
 
     # One worker only. `ReplayGuard` in app/security/telegram_auth.py is an
     # in-memory dict, so a second worker would have its own copy and a replayed

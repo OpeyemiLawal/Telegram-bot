@@ -1,0 +1,14 @@
+{
+  // The test files, which the app's tsconfig deliberately excludes.
+  //
+  // `next build` type-checks everything in its `include`, and a test file there
+  // drags Vitest's globals and config types into the production build's scope for
+  // no benefit — the tests are never bundled. Excluding them keeps the build
+  // narrow, but excluding them everywhere would leave them unchecked, which is
+  // how a test quietly stops compiling and nobody notices until it is needed.
+  //
+  // Check them with:  npx tsc --noEmit -p tsconfig.test.json
+  "extends": "./tsconfig.json",
+  "include": ["lib/**/*.test.ts", "vitest.config.ts", "lib/**/*.ts"],
+  "exclude": ["node_modules"]
+}

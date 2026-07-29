@@ -13,8 +13,12 @@ from app.bot.instance import bot, dispatcher
 from app.bot.keyboards import persistent_menu_button
 from app.config import get_settings
 from app.db import create_schema
+from app.security import log_scrub
 
-logging.basicConfig(level=logging.INFO)
+# Before anything else logs. `install` replaces the root handler's formatter and
+# adds the redaction filter, so uvicorn's startup lines and aiogram's request
+# logging are covered too — they propagate to root like everything else.
+log_scrub.install(logging.INFO)
 logger = logging.getLogger("sga")
 
 settings = get_settings()
@@ -22,7 +26,13 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    await create_schema()
+    # Production schema is Alembic's job, applied by the start command before
+    # this process exists (see render.yaml). Doing it here as well would mean two
+    # mechanisms owning the same schema, and `create_all` is the one that fails
+    # silently — it never alters an existing table, so a model change would look
+    # applied and not be.
+    if not settings.is_production:
+        await create_schema()
 
     await bot.set_webhook(
         url=settings.webhook_url,

@@ -171,6 +171,17 @@ export interface Game {
 
 export const getGames = () => request<Game[]>("/games");
 
+/**
+ * Fetched from the API rather than taken from the URL.
+ *
+ * The slug arrives from the address bar, so the embed URL must not. Trusting a
+ * client-supplied URL to fill an iframe would let anyone frame any site inside
+ * the shell and have the bridge treat its origin as trusted. The catalogue is
+ * the only authority for which origins are games.
+ */
+export const getGame = (slug: string) =>
+  request<Game>(`/games/${encodeURIComponent(slug)}`);
+
 export interface WalletChallenge {
   nonce: string;
   message: string;

@@ -224,3 +224,104 @@ def test_wallet_link_requires_signed_ownership(client):
     assert disconnected.status_code == 204
     me = client.get("/api/auth/me", headers=headers)
     assert me.json()["wallet_address"] is None
+
+
+def test_linking_and_unlinking_notify_the_chat(client, telegram):
+    """The chat is the only place the user can see stale state.
+
+    An inline keyboard is frozen into the message it shipped with, so a wallet
+    linked inside the Mini App leaves a "Connect wallet" button behind that is
+    now wrong. These notifications are what correct it — worth asserting,
+    because the failure is silent: everything else keeps working and the button
+    simply lies.
+    """
+    signing_key = SigningKey.generate()
+    address = _base58_encode(bytes(signing_key.verify_key))
+
+    tokens = login(client, user={"id": 555010, "first_name": "Grace"}).json()
+    headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+
+    challenge = client.post(
+        "/api/wallet/challenge", headers=headers, json={"address": address}
+    ).json()
+    signature = signing_key.sign(challenge["message"].encode()).signature
+
+    telegram.messages.clear()
+    linked = client.post(
+        "/api/wallet/connect",
+        headers=headers,
+        json={
+            "nonce": challenge["nonce"],
+            "address": address,
+            "signature": base64.b64encode(signature).decode(),
+        },
+    )
+    assert linked.status_code == 200, linked.text
+
+    assert len(telegram.messages) == 1
+    chat_id, text = telegram.messages[0]
+    assert chat_id == 555010
+    assert address in text
+
+    telegram.messages.clear()
+    assert client.delete("/api/wallet", headers=headers).status_code == 204
+
+    assert len(telegram.messages) == 1
+    assert "disconnected" in telegram.messages[0][1].lower()
+    # Nothing left the wallet, and the message must not imply otherwise.
+    assert "nothing was moved" in telegram.messages[0][1].lower()
+
+
+def test_login_is_rate_limited(client):
+    """The one endpoint an attacker can hit with no credentials at all.
+
+    Verifying initData costs an HMAC-SHA256 plus a database round trip, and
+    proving identity is the endpoint's entire purpose, so it cannot be put behind
+    a token. Throttling is the only lever left.
+
+    Asserts the 429 *and* Retry-After: without a hint at when to try again a
+    client's only sensible move is to keep retrying, which is the behaviour the
+    limit exists to stop.
+    """
+    from app.security.rate_limit import login_limiter
+
+    last = None
+    for index in range(login_limiter.limit + 2):
+        last = login(client, user={"id": 555020 + index, "first_name": "Ada"})
+
+    assert last is not None
+    assert last.status_code == 429, last.text
+    assert int(last.headers["Retry-After"]) >= 1
+    assert "try again" in last.json()["detail"].lower()
+
+
+def test_rate_limit_is_per_client(client):
+    """A throttled address must not throttle everyone else.
+
+    A limiter keyed on something shared — or on a proxy address rather than the
+    forwarded one — degrades into a global cap the first time a single client
+    misbehaves. That failure looks like an outage, not a limit.
+    """
+    from app.security.rate_limit import login_limiter
+
+    noisy = {"X-Forwarded-For": "203.0.113.10"}
+    for index in range(login_limiter.limit + 1):
+        client.post(
+            "/api/auth/telegram",
+            headers=noisy,
+            json={"init_data": build_init_data(user={"id": 555040 + index})},
+        )
+
+    blocked = client.post(
+        "/api/auth/telegram",
+        headers=noisy,
+        json={"init_data": build_init_data(user={"id": 555060})},
+    )
+    assert blocked.status_code == 429
+
+    quiet = client.post(
+        "/api/auth/telegram",
+        headers={"X-Forwarded-For": "198.51.100.7"},
+        json={"init_data": build_init_data(user={"id": 555061})},
+    )
+    assert quiet.status_code == 200, quiet.text

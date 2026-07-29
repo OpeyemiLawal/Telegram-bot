@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SGA Bridge Test</title>
+
+    <!--
+      A stand-in for a Godot export, and the first thing to deploy.
+
+      It loads the real sga-sdk.js and speaks the real protocol, so every failure
+      it finds is a failure a game would have hit — but it needs no Godot install,
+      no export templates, and no wait. When something is wrong it is also far
+      easier to read: a WebGL canvas cannot tell you which message went
+      unanswered, and this page prints every one.
+
+      Once this works end to end, a Godot export is the same bridge with a
+      different caller.
+    -->
+    <style>
+      :root {
+        --bg: #0b1620;
+        --panel: #12212e;
+        --line: #23384a;
+        --text: #e8eef4;
+        --muted: #93a8ba;
+        --gold: #c89b3c;
+        --green: #7fd4b0;
+        --red: #ff8a80;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 20px;
+        background: var(--bg);
+        color: var(--text);
+        font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif;
+      }
+      h1 { font-size: 19px; margin: 0 0 4px; }
+      .sub { color: var(--muted); font-size: 13px; margin: 0 0 18px; }
+      .status {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        background: var(--panel);
+      }
+      .status strong { color: var(--gold); }
+      .row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+      button {
+        flex: 1 1 auto;
+        min-width: 120px;
+        padding: 11px 14px;
+        border-radius: 9px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--text);
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:hover { border-color: var(--gold); }
+      button.danger { border-color: #4a2a2a; }
+      #log {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 12px;
+        background: #0d1a25;
+        font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: pre-wrap;
+        word-break: break-all;
+        min-height: 220px;
+        max-height: 48vh;
+        overflow-y: auto;
+      }
+      .ok { color: var(--green); }
+      .err { color: var(--red); }
+      .dim { color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <h1>SGA Bridge Test</h1>
+    <p class="sub">Stands in for a Godot export. Every message is logged.</p>
+
+    <div class="status" id="status">checking…</div>
+
+    <div class="row">
+      <button onclick="doHandshake()">handshake</button>
+      <button onclick="doPlayer()">getPlayer</button>
+      <button onclick="doHaptic()">haptic</button>
+      <button onclick="doExit()">exit</button>
+    </div>
+
+    <div class="row">
+      <button class="danger" onclick="doForbidden()">try a forbidden message</button>
+      <button onclick="clearLog()">clear</button>
+    </div>
+
+    <div id="log"></div>
+
+    <script src="sga-sdk.js"></script>
+    <script>
+      var logEl = document.getElementById("log");
+
+      function log(text, cls) {
+        var stamp = new Date().toLocaleTimeString();
+        var line = document.createElement("div");
+        if (cls) line.className = cls;
+        line.textContent = "[" + stamp + "] " + text;
+        logEl.appendChild(line);
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      function clearLog() {
+        logEl.textContent = "";
+      }
+
+      function show(label, result) {
+        if (result && result.error) {
+          log(label + " -> ERROR: " + result.error, "err");
+        } else {
+          log(label + " -> " + JSON.stringify(result), "ok");
+        }
+      }
+
+      // Availability is the first thing worth knowing. Opened directly rather
+      // than embedded, every request fails immediately with a clear reason
+      // instead of hanging — which is the behaviour a game developer needs when
+      // testing outside the shell.
+      (function () {
+        var el = document.getElementById("status");
+        if (!window.SGA) {
+          el.innerHTML = "<strong>SDK not loaded.</strong> Is sga-sdk.js next to this file?";
+          return;
+        }
+        var embedded = window.parent && window.parent !== window;
+        el.innerHTML =
+          "<strong>SDK v" + window.SGA.version + "</strong> · " +
+          (window.SGA.isAvailable()
+            ? "connected to the shell"
+            : embedded
+              ? "embedded, but no shell origin — is ?sgaOrigin= set?"
+              : "opened directly, not embedded (expected failures below)");
+      })();
+
+      function doHandshake() {
+        log("handshake…", "dim");
+        SGA.handshake(function (r) { show("handshake", r); });
+      }
+
+      function doPlayer() {
+        log("getPlayer…", "dim");
+        SGA.getPlayer(function (r) {
+          show("getPlayer", r);
+          if (r && r.walletAddress === null) {
+            log("wallet not linked — link one in the Wallet screen", "dim");
+          }
+          // The point of the test: no token should ever appear here.
+          ["accessToken", "access_token", "refreshToken", "initData"].forEach(
+            function (key) {
+              if (r && r[key]) log("LEAK: response contained " + key, "err");
+            },
+          );
+        });
+      }
+
+      function doHaptic() {
+        SGA.haptic("medium");
+        log("haptic(medium) sent — fire and forget, no reply expected", "dim");
+      }
+
+      function doExit() {
+        log("exit sent — the shell should navigate away", "dim");
+        SGA.exit();
+      }
+
+      /**
+       * Sends a message type the shell does not implement, bypassing the SDK.
+       *
+       * The correct outcome is silence. The shell's allowlist should drop it
+       * without a reply and without an error, which is why this button exists:
+       * "nothing happened" is the pass condition, and that is worth seeing once
+       * rather than assuming.
+       */
+      function doForbidden() {
+        if (!window.parent || window.parent === window) {
+          log("not embedded — nothing to send to", "err");
+          return;
+        }
+        var origin = new URLSearchParams(window.location.search).get("sgaOrigin");
+        window.parent.postMessage(
+          { sga: 1, id: "forbidden-1", type: "signTransaction", payload: { lamports: 1 } },
+          origin || "*",
+        );
+        log("sent type=signTransaction — expect NO reply (that is the pass)", "dim");
+        setTimeout(function () {
+          log("no reply received: allowlist held", "ok");
+        }, 1500);
+      }
+    </script>
+  </body>
+</html>

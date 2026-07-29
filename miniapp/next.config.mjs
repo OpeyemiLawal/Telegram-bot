@@ -65,7 +65,26 @@ const nextConfig = {
                 .filter(Boolean)
                 .join(" "),
 
-              "frame-src 'self' https://*.walletconnect.com https://*.reown.com",
+              // Game origins have to be listed here or the iframe is blocked
+              // before a single byte loads — and the browser reports that as a
+              // blank frame, not as a CSP problem.
+              //
+              // Read from NEXT_PUBLIC_GAME_ORIGINS rather than hardcoded so
+              // adding a game is a configuration change. It is an allowlist for
+              // a reason: this directive and the bridge's origin check are the
+              // two things standing between "a game we published" and "any page
+              // that can get itself framed inside the shell".
+              [
+                "frame-src 'self'",
+                "https://*.walletconnect.com https://*.reown.com",
+                (process.env.NEXT_PUBLIC_GAME_ORIGINS ?? "")
+                  .split(",")
+                  .map((origin) => origin.trim())
+                  .filter(Boolean)
+                  .join(" "),
+              ]
+                .filter(Boolean)
+                .join(" "),
               "frame-ancestors https://web.telegram.org https://telegram.org",
             ].join("; "),
           },

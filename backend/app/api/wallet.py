@@ -19,6 +19,7 @@ from app.bot.menu_sync import announce, refresh_menu
 from app.config import Settings, get_settings
 from app.db import get_session
 from app.models import User, WalletChallenge
+from app.security.rate_limit import rate_limit, wallet_limiter
 
 router = APIRouter(prefix="/wallet", tags=["wallet"])
 
@@ -67,7 +68,11 @@ def _as_utc(value: datetime) -> datetime:
     return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
 
 
-@router.post("/challenge", response_model=ChallengeOut)
+@router.post(
+    "/challenge",
+    response_model=ChallengeOut,
+    dependencies=[Depends(rate_limit(wallet_limiter))],
+)
 async def create_wallet_challenge(
     body: ChallengeRequest,
     user: User = Depends(current_user),
