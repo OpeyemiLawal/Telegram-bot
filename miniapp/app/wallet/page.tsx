@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   useAppKit,
@@ -24,6 +25,57 @@ import { walletKitConfigured, walletKitDiagnostics } from "@/lib/wallet-kit";
 
 function shortAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-6)}`;
+}
+
+/**
+ * The four states the wallet screen can be in. Naming them is what stops the
+ * UI drifting: every heading, sentence and button below is chosen by exactly
+ * one of these, so no combination of booleans can render a screen that says
+ * two things at once.
+ */
+type Stage = "choose" | "approving" | "declined" | "linked";
+
+/**
+ * A two-step progress marker.
+ *
+ * Connecting a wallet takes the user out to another app and back. Without a
+ * visible position in a sequence, the return trip reads as "something happened,
+ * unclear what" — and the natural response is to tap the first button again,
+ * which is exactly the confused double-connect this replaces.
+ */
+function Steps({ stage }: { stage: Stage }) {
+  const reached = stage === "choose" ? 1 : 2;
+  const done = stage === "linked";
+
+  return (
+    <ol
+      aria-label="Wallet setup progress"
+      style={{
+        display: "flex",
+        gap: 6,
+        listStyle: "none",
+        padding: 0,
+        margin: "0 0 14px",
+      }}
+    >
+      {[1, 2].map((step) => {
+        const active = step <= reached;
+        return (
+          <li
+            key={step}
+            aria-current={step === reached && !done ? "step" : undefined}
+            style={{
+              flex: 1,
+              height: 3,
+              borderRadius: 2,
+              background: active ? "currentColor" : "currentColor",
+              opacity: done ? 0.9 : active ? 0.55 : 0.15,
+            }}
+          />
+        );
+      })}
+    </ol>
+  );
 }
 
 /**
@@ -186,31 +238,53 @@ function ConnectedWalletConnector({
   }
 
 
+  // One derived value rather than three booleans read in four places. Each
+  // stage has exactly one heading, one explanation and one set of actions, so
+  // there is no combination of flags that can render a contradictory screen.
+  const stage: Stage = verified
+    ? "linked"
+    : isConnected
+      ? working
+        ? "approving"
+        : "declined"
+      : "choose";
+
+  const COPY: Record<Stage, { eyebrow: string; body: string }> = {
+    choose: {
+      eyebrow: "Step 1 of 2 — choose",
+      body: user.wallet_address
+        ? "Reconnect the wallet you linked earlier."
+        : "Pick the wallet you already use. We never create one for you and never see your keys.",
+    },
+    approving: {
+      eyebrow: "Step 2 of 2 — approve",
+      body: "Approve the signature in your wallet, then come back. It costs no SOL and moves nothing.",
+    },
+    declined: {
+      eyebrow: "Step 2 of 2 — approve",
+      body: "The signature was not completed, so nothing was linked. Your wallet is untouched.",
+    },
+    linked: {
+      eyebrow: "Wallet linked",
+      body: "Every game here will use this wallet. You approve each transaction yourself.",
+    },
+  };
+
   return (
     <div className="wallet-panel">
-      <span className="eyebrow">
-        {verified ? "Verified wallet" : isConnected ? "Wallet selected" : "External wallet"}
-      </span>
+      <Steps stage={stage} />
+
+      <span className="eyebrow">{COPY[stage].eyebrow}</span>
 
       <p className="wallet-panel__address">
         {address
           ? shortAddress(address)
           : user.wallet_address
             ? shortAddress(user.wallet_address)
-            : "Not connected"}
+            : "No wallet yet"}
       </p>
 
-      <p className="body">
-        {verified
-          ? "This wallet is linked to your Telegram account and will be used by every game."
-          : isConnected
-            ? working
-              ? "Approve the signature in your wallet. It costs no SOL."
-              : "The signature was not completed. Nothing was sent."
-            : user.wallet_address
-              ? "Reconnect this wallet when a game needs a signature."
-              : "Connect Phantom, Solflare, Backpack, or another Solana wallet."}
-      </p>
+      <p className="body">{COPY[stage].body}</p>
 
       {error && <p className="wallet-panel__error">{error}</p>}
 
@@ -265,14 +339,22 @@ function ConnectedWalletConnector({
           </>
         )}
 
+        {/* Linking is a means, not an end — the player came here to play. The
+            primary action leads onward; disconnecting is deliberately the quiet
+            one, since it is rare and destructive of a step they just took. */}
         {verified && (
-          <button
-            className="button button--quiet"
-            disabled={working}
-            onClick={() => void forgetWallet()}
-          >
-            {working ? "Disconnecting…" : "Disconnect wallet"}
-          </button>
+          <>
+            <Link className="button" href="/games" onClick={() => tap()}>
+              Browse games
+            </Link>
+            <button
+              className="button button--quiet"
+              disabled={working}
+              onClick={() => void forgetWallet()}
+            >
+              {working ? "Disconnecting…" : "Disconnect wallet"}
+            </button>
+          </>
         )}
       </div>
 

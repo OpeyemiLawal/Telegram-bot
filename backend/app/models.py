@@ -89,6 +89,41 @@ class RefreshToken(Base):
         return _as_utc(self.expires_at) > _utcnow()
 
 
+class BotMenuMessage(Base):
+    """Where the bot last drew this user's menu, so it can be redrawn.
+
+    A Telegram inline keyboard is part of the message it was sent with. There is
+    no "update the user's buttons" call — you edit a specific message in a
+    specific chat, which means remembering which one.
+
+    Deliberately a separate table rather than two columns on `users`. Schema
+    here is built by `create_all`, which creates missing tables but never alters
+    existing ones, so adding a column to `users` would appear to work locally
+    against a fresh database and silently do nothing to production. A new table
+    is the one shape of change `create_all` handles correctly. Fold this into
+    `users` when Alembic lands.
+
+    One row per user: only the most recent menu is worth keeping current, and
+    older ones scroll out of view anyway.
+    """
+
+    __tablename__ = "bot_menu_messages"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    chat_id: Mapped[int] = mapped_column(BigInteger)
+    message_id: Mapped[int] = mapped_column(BigInteger)
+
+    # What the keyboard currently shows. Telegram rejects an edit that would
+    # not change anything, so we check before calling rather than catching.
+    shows_wallet_linked: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
 class WalletChallenge(Base):
     __tablename__ = "wallet_challenges"
 

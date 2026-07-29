@@ -1,40 +1,80 @@
 from __future__ import annotations
 
+import logging
 import re
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.bot.keyboards import main_menu, open_app_button
+from app.bot.menu_sync import remember_menu
 from app.db import SessionMaker
 from app.models import User
 
 router = Router(name="main")
+logger = logging.getLogger("sga.bot")
 
 
-async def _has_linked_wallet(message: Message) -> bool:
-    """Whether this Telegram user has already proved ownership of a wallet.
+async def _reply_with_menu(message: Message, text: str) -> None:
+    """Answer with the main menu, labelled for this user, and remember it.
 
-    Read-only and deliberately forgiving: this only decides a button label, so
-    a database hiccup should degrade to the pre-link wording rather than break
-    the bot's reply. Nothing here grants access — the Mini App still verifies
-    initData and the wallet signature independently.
+    Remembering matters: the keyboard has to flip to "View wallet" the moment a
+    wallet is linked inside the Mini App, and Telegram can only do that by
+    editing this exact message. See `app/bot/menu_sync.py`.
+
+    The whole thing is wrapped: a database that is briefly unavailable should
+    cost the user a correct button label, never a reply. The fallback keyboard
+    says "Connect wallet", which is the safe way to be wrong — it points at the
+    screen that works whether or not a wallet is already linked.
     """
     if message.from_user is None:
-        return False
+        await message.answer(text, reply_markup=main_menu())
+        return
 
     try:
         async with SessionMaker() as session:
-            address = await session.scalar(
-                select(User.wallet_address).where(
-                    User.telegram_id == message.from_user.id
-                )
+            user = await session.scalar(
+                select(User).where(User.telegram_id == message.from_user.id)
             )
-        return bool(address)
-    except Exception:  # noqa: BLE001 — a label is never worth a failed reply
-        return False
+
+            if user is None:
+                # Created here as well as at login, which is a deliberate
+                # loosening of "only /auth/telegram creates users".
+                #
+                # It is safe: this code path is only reachable from a webhook
+                # that already matched WEBHOOK_SECRET, so the telegram_id is as
+                # trustworthy as a verified initData. And it is necessary — a
+                # row is what the menu record points at, so without one the
+                # first menu a new player ever sees could never update itself.
+                # The row carries no privilege; it holds a Telegram id and
+                # nothing else until they sign in.
+                user = User(
+                    telegram_id=message.from_user.id,
+                    first_name=message.from_user.first_name or "",
+                    username=message.from_user.username,
+                )
+                session.add(user)
+                await session.flush()
+
+            has_wallet = bool(user.wallet_address)
+            sent = await message.answer(
+                text, reply_markup=main_menu(has_wallet=has_wallet)
+            )
+
+            await remember_menu(
+                session,
+                user_id=user.id,
+                chat_id=sent.chat.id,
+                message_id=sent.message_id,
+                shows_wallet_linked=has_wallet,
+            )
+            await session.commit()
+    except SQLAlchemyError:
+        logger.exception("Menu bookkeeping failed; replying without it")
+        await message.answer(text, reply_markup=main_menu())
 
 
 WELCOME = (
@@ -74,21 +114,13 @@ _BASE58_KEY = re.compile(r"[1-9A-HJ-NP-Za-km-z]{80,}")
 
 @router.message(CommandStart())
 async def handle_start(message: Message) -> None:
-    await message.answer(
-        WELCOME, reply_markup=main_menu(has_wallet=await _has_linked_wallet(message))
-    )
+    await _reply_with_menu(message, WELCOME)
 
 
 @router.message(Command("wallet"))
 async def handle_wallet(message: Message) -> None:
-    linked = await _has_linked_wallet(message)
-    await message.answer(
-        "Your linked wallet and balances."
-        if linked
-        else "Connect the wallet you will use across every game.",
-        reply_markup=open_app_button(
-            "View wallet" if linked else "Connect wallet", "/wallet"
-        ),
+    await _reply_with_menu(
+        message, "Your wallet, and the games it is connected to."
     )
 
 
@@ -102,9 +134,7 @@ async def handle_games(message: Message) -> None:
 
 @router.message(Command("help"))
 async def handle_help(message: Message) -> None:
-    await message.answer(
-        HELP, reply_markup=main_menu(has_wallet=await _has_linked_wallet(message))
-    )
+    await _reply_with_menu(message, HELP)
 
 
 @router.callback_query(F.data == "help")
@@ -132,7 +162,6 @@ async def handle_loose_text(message: Message) -> None:
         )
         return
 
-    await message.answer(
-        "I only handle launching the app. Use the buttons below.",
-        reply_markup=main_menu(has_wallet=await _has_linked_wallet(message)),
+    await _reply_with_menu(
+        message, "I only handle launching the app. Use the buttons below."
     )

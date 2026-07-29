@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth import UserOut, _to_out
 from app.api.deps import current_user
+from app.bot.menu_sync import announce, refresh_menu
 from app.config import Settings, get_settings
 from app.db import get_session
 from app.models import User, WalletChallenge
@@ -141,12 +142,34 @@ async def connect_wallet(
     challenge.used_at = now
     user.wallet_address = body.address
     await session.flush()
+
+    # The chat is showing a "Connect wallet" button that is now wrong. Fix it
+    # before returning, so the Mini App and the chat agree by the time the user
+    # switches back. Failures here are logged and swallowed — see menu_sync.
+    await refresh_menu(session, user_id=user.id, has_wallet=True)
+    await announce(
+        user.telegram_id,
+        "✅ Wallet linked.\n\n"
+        f"<code>{body.address}</code>\n\n"
+        "Every game here will use this wallet. You approve each transaction "
+        "yourself — we cannot move funds for you.",
+    )
+
     return _to_out(user)
 
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def disconnect_wallet(
     user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_session),
 ) -> Response:
     user.wallet_address = None
+    await session.flush()
+
+    await refresh_menu(session, user_id=user.id, has_wallet=False)
+    await announce(
+        user.telegram_id,
+        "Wallet disconnected. Nothing was moved — we only forgot the address.",
+    )
+
     return Response(status_code=status.HTTP_204_NO_CONTENT)
