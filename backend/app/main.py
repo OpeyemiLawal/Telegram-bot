@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from aiogram.types import Update
@@ -102,4 +103,20 @@ async def telegram_webhook(request: Request) -> Response:
 
 @app.get("/health", include_in_schema=False)
 async def health() -> dict[str, str]:
-    return {"status": "ok"}
+    """Liveness, plus which build is actually answering.
+
+    The commit is here because "is my fix deployed?" is otherwise unanswerable
+    from outside. A host that serves a stale build after a push looks exactly
+    like a fix that did not work, and the debugging goes to the wrong place —
+    the code — for as long as the ambiguity lasts. Render injects
+    RENDER_GIT_COMMIT on every deploy; other hosts expose their own equivalent.
+    """
+    commit = os.environ.get("RENDER_GIT_COMMIT", "unknown")
+    return {
+        "status": "ok",
+        "commit": commit[:7] if commit != "unknown" else commit,
+        "environment": settings.environment,
+        # The setting behind the two auth failures that are hardest to tell
+        # apart from the client: a rejected relaunch and an expired payload.
+        "initdata_max_age": str(settings.initdata_max_age),
+    }
