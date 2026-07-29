@@ -160,18 +160,23 @@ export function ensureWalletKit(): Promise<void> {
         // is in the list below.
         allWallets: "HIDE",
 
-        // A strict allowlist when configured, otherwise AppKit's own defaults.
+        // `featuredWalletIds`, deliberately not `includeWalletIds`.
         //
-        // Left unset the modal advertises its recommended wallets whether or
-        // not they are installed, which on desktop means most of the list is
-        // aspirational. Naming the wallets this app actually supports turns the
-        // chooser into a short, honest menu.
+        // The two look interchangeable and are not. `includeWalletIds` is a hard
+        // allowlist — AppKit's own docs say those "will be the only ones shown"
+        // — and it does not spare wallets the browser has already announced. So
+        // an extension the user has installed right now disappears from the
+        // chooser because it is absent from a list of six ids. That is the worst
+        // possible thing for this list to do: it hides a wallet we know works.
+        //
+        // `featuredWalletIds` only sets priority. Our six sort to the top,
+        // installed extensions still appear, and nothing the user owns is
+        // hidden from them.
         //
         // Values are WalletConnect explorer ids — see .env.example for how to
-        // look them up. Deliberately configuration rather than a constant: a
-        // wrong id fails silently by showing nothing, so it belongs somewhere
-        // it can be corrected without a code change.
-        ...(walletIds.length ? { includeWalletIds: walletIds } : {}),
+        // look them up. Configuration rather than a constant because a wrong id
+        // fails silently by showing nothing.
+        ...(walletIds.length ? { featuredWalletIds: walletIds } : {}),
         features: {
           analytics: false,
           email: false,

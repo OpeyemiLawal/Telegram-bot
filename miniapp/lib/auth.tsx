@@ -59,6 +59,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (started.current) return;
     started.current = true;
     void boot();
+
+    /**
+     * Warm the wallet stack while the user is still on the home screen.
+     *
+     * `ensureWalletKit()` initialises a WalletConnect UniversalProvider, which
+     * performs a relay handshake and pulls the wallet registry. Left until the
+     * Wallet screen mounts, that cost lands squarely between the user tapping a
+     * wallet and their extension appearing — a pause with no explanation, which
+     * reads as the click not having registered.
+     *
+     * Starting it here moves the same work into time the user is already
+     * spending reading the home screen. It is idempotent and deliberately not
+     * awaited: nothing about signing in depends on it, and a failure is already
+     * captured and surfaced by the Wallet screen's diagnostics.
+     */
+    void import("./wallet-kit").then((m) => m.ensureWalletKit());
   }, [boot]);
 
   return (
