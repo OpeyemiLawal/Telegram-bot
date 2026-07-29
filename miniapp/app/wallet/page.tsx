@@ -37,7 +37,7 @@ function shortAddress(address: string): string {
  * one of these, so no combination of booleans can render a screen that says
  * two things at once.
  */
-type Stage = "choose" | "approving" | "declined" | "linked";
+type Stage = "choose" | "approving" | "declined" | "linked" | "mismatch";
 
 /**
  * A two-step progress marker.
@@ -149,10 +149,29 @@ function ConnectedWalletConnector({
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const verified =
-    Boolean(address) &&
-    Boolean(user.wallet_address) &&
-    address === user.wallet_address;
+  /**
+   * Two different facts, previously conflated into one.
+   *
+   * `linked` is durable and lives on the server: this Telegram account proved
+   * ownership of this address, and that stays true until the user unlinks it.
+   *
+   * `address` is a live WalletConnect session, and it is *transient* — the
+   * session does not survive the Mini App relaunch that returning from the
+   * wallet causes. Requiring it to consider a wallet linked meant a player who
+   * had just finished linking came back to a screen offering "Connect wallet",
+   * as though nothing had happened.
+   *
+   * Only the server fact decides what the screen says. A session is needed
+   * again when something actually has to be signed, not to display state.
+   */
+  const linked = Boolean(user.wallet_address);
+
+  // The one case worth distinguishing: a live session on a *different* wallet
+  // than the linked one. Silently showing the linked address would misrepresent
+  // which wallet is about to be asked for a signature.
+  const mismatched = linked && Boolean(address) && address !== user.wallet_address;
+
+  const verified = linked && !mismatched;
 
   async function verifySelectedWallet() {
     if (!address || !walletProvider) return;
@@ -246,20 +265,24 @@ function ConnectedWalletConnector({
   // One derived value rather than three booleans read in four places. Each
   // stage has exactly one heading, one explanation and one set of actions, so
   // there is no combination of flags that can render a contradictory screen.
-  const stage: Stage = verified
-    ? "linked"
-    : isConnected
-      ? working
-        ? "approving"
-        : "declined"
-      : "choose";
+  const stage: Stage = mismatched
+    ? "mismatch"
+    : verified
+      ? "linked"
+      : isConnected
+        ? working
+          ? "approving"
+          : "declined"
+        : "choose";
 
   const COPY: Record<Stage, { eyebrow: string; body: string }> = {
     choose: {
       eyebrow: "Step 1 of 2 — choose",
-      body: user.wallet_address
-        ? "Reconnect the wallet you linked earlier."
-        : "Pick the wallet you already use. We never create one for you and never see your keys.",
+      body: "Pick the wallet you already use. We never create one for you and never see your keys.",
+    },
+    mismatch: {
+      eyebrow: "Different wallet connected",
+      body: "This is not the wallet linked to your account. Link this one instead, or reconnect the original.",
     },
     approving: {
       eyebrow: "Step 2 of 2 — approve",
@@ -281,11 +304,14 @@ function ConnectedWalletConnector({
 
       <span className="eyebrow">{COPY[stage].eyebrow}</span>
 
+      {/* The linked address wins over the session address. They differ only in
+          the mismatch case, where showing the session's would imply we had
+          switched accounts without being asked. */}
       <p className="wallet-panel__address">
-        {address
-          ? shortAddress(address)
-          : user.wallet_address
-            ? shortAddress(user.wallet_address)
+        {user.wallet_address
+          ? shortAddress(user.wallet_address)
+          : address
+            ? shortAddress(address)
             : "No wallet yet"}
       </p>
 
@@ -294,7 +320,11 @@ function ConnectedWalletConnector({
       {error && <p className="wallet-panel__error">{error}</p>}
 
       <div className="wallet-panel__actions">
-        {!isConnected && (
+        {/* Gated on `linked`, not on `isConnected`. Offering "Connect wallet" to
+            someone who has already linked one is the bug this replaces: their
+            WalletConnect session is gone after the relaunch, but their wallet is
+            still linked, and the screen should say so. */}
+        {stage === "choose" && (
           <>
             {/* "Connect" lists installed wallets and deep-links into the chosen
                 one, which is the whole interaction on a phone. The QR exists so
@@ -325,7 +355,7 @@ function ConnectedWalletConnector({
             this branch is only reached while it is in flight, or after the user
             declined it in their wallet — hence "Try again" rather than a first
             instruction. */}
-        {isConnected && !verified && (
+        {(stage === "approving" || stage === "declined") && (
           <>
             <button
               className="button"
@@ -344,10 +374,35 @@ function ConnectedWalletConnector({
           </>
         )}
 
+        {/* A live session on a wallet other than the linked one. Switching is
+            offered, never assumed — it costs a signature and changes which
+            wallet every game will use. */}
+        {stage === "mismatch" && (
+          <>
+            <button
+              className="button"
+              disabled={working}
+              onClick={() => {
+                attempted.current = null;
+                void verifySelectedWallet();
+              }}
+            >
+              {working ? "Check your wallet…" : "Link this wallet instead"}
+            </button>
+            <button
+              className="button button--quiet"
+              disabled={working}
+              onClick={() => void disconnect({ namespace: "solana" })}
+            >
+              Keep the linked one
+            </button>
+          </>
+        )}
+
         {/* Linking is a means, not an end — the player came here to play. The
             primary action leads onward; disconnecting is deliberately the quiet
             one, since it is rare and destructive of a step they just took. */}
-        {verified && (
+        {stage === "linked" && (
           <>
             <Link className="button" href="/games" onClick={() => tap()}>
               Browse games
