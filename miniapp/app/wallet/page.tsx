@@ -21,7 +21,11 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { isMobileTelegram, notify, tap, webApp } from "@/lib/telegram";
-import { walletKitConfigured, walletKitDiagnostics } from "@/lib/wallet-kit";
+import {
+  ensureWalletKit,
+  walletKitConfigured,
+  walletKitDiagnostics,
+} from "@/lib/wallet-kit";
 
 function shortAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-6)}`;
@@ -94,6 +98,7 @@ function Diagnostics({ lastError }: { lastError: string | null }) {
     ["Reown project ID", d.projectIdHint ?? "MISSING"],
     ["App URL", d.appUrl],
     ["API URL", d.apiUrl],
+    ["Return-to-Telegram", d.returnUrl],
     ["AppKit startup", d.initError ?? "ok"],
     ["Last connect error", lastError ?? "none"],
   ];
@@ -370,6 +375,22 @@ function WalletConnector({
   user: Me;
   updateUser: (user: Me) => void;
 }) {
+  // AppKit is now built asynchronously, so its hooks cannot be called until it
+  // exists. Mounting the connector only once initialisation settles is what
+  // keeps that guarantee — a hook against a half-built modal throws during
+  // render, which on a phone looks like a blank panel.
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void ensureWalletKit().then(() => {
+      if (alive) setReady(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   if (!walletKitConfigured) {
     return (
       <div className="notice">
@@ -379,6 +400,10 @@ function WalletConnector({
         </p>
       </div>
     );
+  }
+
+  if (!ready) {
+    return <div className="skeleton" style={{ height: 210 }} />;
   }
 
   return <ConnectedWalletConnector user={user} updateUser={updateUser} />;
