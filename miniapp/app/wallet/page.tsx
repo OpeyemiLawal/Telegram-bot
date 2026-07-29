@@ -19,11 +19,48 @@ import {
   type Me,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { isMobileTelegram, notify, tap } from "@/lib/telegram";
-import { walletKitConfigured } from "@/lib/wallet-kit";
+import { isMobileTelegram, notify, tap, webApp } from "@/lib/telegram";
+import { walletKitConfigured, walletKitDiagnostics } from "@/lib/wallet-kit";
 
 function shortAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-6)}`;
+}
+
+/**
+ * Collapsed by default and never shown unless opened. It exists because the
+ * usual way to diagnose a dead wallet button — the browser console — is not
+ * reachable inside Telegram on a phone.
+ */
+function Diagnostics({ lastError }: { lastError: string | null }) {
+  const d = walletKitDiagnostics();
+  const app = typeof window !== "undefined" ? webApp() : null;
+
+  const rows: [string, string][] = [
+    ["Telegram platform", app?.platform ?? "not in Telegram"],
+    ["Telegram version", app?.version ?? "—"],
+    ["Can open wallet apps", typeof app?.openLink === "function" ? "yes" : "no"],
+    ["Reown project ID", d.projectIdHint ?? "MISSING"],
+    ["App URL", d.appUrl],
+    ["API URL", d.apiUrl],
+    ["AppKit startup", d.initError ?? "ok"],
+    ["Last connect error", lastError ?? "none"],
+  ];
+
+  return (
+    <details className="notice" style={{ marginTop: 16 }}>
+      <summary className="body" style={{ cursor: "pointer" }}>
+        Connection diagnostics
+      </summary>
+      <dl style={{ margin: "12px 0 0", fontSize: 13, lineHeight: 1.7 }}>
+        {rows.map(([label, value]) => (
+          <div key={label} style={{ display: "flex", gap: 8 }}>
+            <dt style={{ opacity: 0.6, flex: "0 0 46%" }}>{label}</dt>
+            <dd style={{ margin: 0, wordBreak: "break-all" }}>{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </details>
+  );
 }
 
 function signatureBytes(value: unknown): Uint8Array {
@@ -84,6 +121,26 @@ function ConnectedWalletConnector({
     }
   }
 
+  /**
+   * `open()` rejecting is the single most common cause of "the button does
+   * nothing" — an uncaught rejection here is invisible on a phone. Recording it
+   * puts the reason in the diagnostics panel below.
+   */
+  async function launch(view: "Connect" | "ConnectingWalletConnectBasic") {
+    tap();
+    setError(null);
+    try {
+      await open({ view, namespace: "solana" });
+    } catch (err) {
+      notify("error");
+      setError(
+        err instanceof Error
+          ? `Could not open the wallet chooser: ${err.message}`
+          : "Could not open the wallet chooser.",
+      );
+    }
+  }
+
   async function forgetWallet() {
     setWorking(true);
     setError(null);
@@ -130,37 +187,35 @@ function ConnectedWalletConnector({
       <div className="wallet-panel__actions">
         {!isConnected && (
           <>
+            {/* On a phone "Connect" lists installed wallets and deep-links out
+                to the chosen one. On Telegram Desktop or Web there is nothing
+                to deep-link into, so the QR is the primary path there. Whichever
+                is not primary is offered as the secondary, so neither is a dead
+                end. */}
             <button
               className="button"
               disabled={working}
-              onClick={() => {
-                tap();
-                // On a phone this lists installed wallets and deep-links out to
-                // the chosen one. On Telegram Desktop or Web there is nothing to
-                // deep-link into, so we skip the list and go straight to the QR.
-                void open(
+              onClick={() =>
+                void launch(
                   isMobileTelegram()
-                    ? { view: "Connect", namespace: "solana" }
-                    : { view: "ConnectingWalletConnectBasic", namespace: "solana" },
-                );
-              }}
+                    ? "Connect"
+                    : "ConnectingWalletConnectBasic",
+                )
+              }
             >
               {isMobileTelegram() ? "Connect wallet" : "Connect wallet (QR)"}
             </button>
 
-            {/* The inverse of whatever the primary button does, so both paths
-                are always one tap away and neither is a dead end. */}
             <button
               className="button button--quiet"
               disabled={working}
-              onClick={() => {
-                tap();
-                void open(
+              onClick={() =>
+                void launch(
                   isMobileTelegram()
-                    ? { view: "ConnectingWalletConnectBasic", namespace: "solana" }
-                    : { view: "Connect", namespace: "solana" },
-                );
-              }}
+                    ? "ConnectingWalletConnectBasic"
+                    : "Connect",
+                )
+              }
             >
               {isMobileTelegram() ? "Scan QR instead" : "Choose a wallet"}
             </button>
@@ -196,6 +251,8 @@ function ConnectedWalletConnector({
           </button>
         )}
       </div>
+
+      <Diagnostics lastError={error} />
     </div>
   );
 }
