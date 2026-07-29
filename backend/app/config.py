@@ -21,7 +21,21 @@ class Settings(BaseSettings):
     allowed_origins: str = Field(alias="ALLOWED_ORIGINS")
 
     database_url: str = Field(alias="DATABASE_URL")
-    initdata_max_age: int = Field(default=300, alias="INITDATA_MAX_AGE")
+    # 24 hours, not the 5 minutes you would pick on first principles.
+    #
+    # Telegram does not re-mint initData when a Mini App is relaunched — the
+    # original auth_date is handed back unchanged. Any flow that leaves the app
+    # and returns therefore presents "old" initData through no fault of the
+    # user, and linking a wallet is exactly that: Telegram → wallet app →
+    # approve → back. A 300s window rejects a perfectly legitimate return trip
+    # with "Could not verify your Telegram session."
+    #
+    # The window is not what makes replay hard here; `ReplayGuard` is. Each
+    # hash is redeemable exactly once, so a leaked initData buys an attacker a
+    # single login they must win a race to use — and only if they already have
+    # the string, which travels solely over HTTPS to our own origin. Widening
+    # the window does not weaken that property.
+    initdata_max_age: int = Field(default=86_400, alias="INITDATA_MAX_AGE")
     environment: str = Field(default="development", alias="ENVIRONMENT")
 
     # Writes failing initData payloads to last_initdata.txt for

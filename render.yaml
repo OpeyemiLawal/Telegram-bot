@@ -80,8 +80,10 @@ services:
 
       - key: ENVIRONMENT
         value: production
+      # 24h. Telegram reuses the original auth_date when a Mini App is
+      # relaunched, so a short window rejects the return trip from a wallet app.
       - key: INITDATA_MAX_AGE
-        value: "300"
+        value: "86400"
 
       # Off in production. The capture file contains a real user profile.
       - key: DEBUG_AUTH
