@@ -1,30 +1,33 @@
-; Godot 4 project file.
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
 ;
-; Minimal on purpose. The point of this project is to prove the bridge works
-; from GDScript — every control is built in code so there is one script to read
-; and no scene file to keep in sync with it.
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
 
 config_version=5
+
+[animation]
+
+compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 [application]
 
 config/name="SGA Bridge Test"
 run/main_scene="res://Main.tscn"
-config/features=PackedStringArray("4.3", "GL Compatibility")
+config/features=PackedStringArray("4.6", "GL Compatibility")
 
 [display]
 
-; Portrait, matching the aspect ratio the shell's iframe uses (9:16).
 window/size/viewport_width=720
 window/size/viewport_height=1280
+window/size/mode=3
+window/size/borderless=true
 window/stretch/mode="canvas_items"
-window/stretch/aspect="keep_width"
+window/stretch/aspect="expand"
 
 [rendering]
 
-; GL Compatibility, not Forward+.
-;
-; Forward+ needs WebGPU, which is not reliably available inside Telegram's
-; WebView. Compatibility targets WebGL2 and runs everywhere the Mini App does.
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
