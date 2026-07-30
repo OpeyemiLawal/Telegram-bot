@@ -1,4 +1,4 @@
-# Exporting Tap Rush
+# Exporting a game
 
 The project lives here. The export goes somewhere else — mixing built output into
 a source folder is easy to do and tedious to undo.
@@ -10,94 +10,87 @@ test-game/godot-export/   the export (generated, deployed)
 
 ---
 
-## 1. Export
+## One-time setup per project
 
-Open `test-game/godot` in Godot 4.3 or newer.
+Two settings. Do these once and every future export is bridge-ready with no
+editing afterwards.
 
-**Project → Export → Add… → Web**
+**Project → Export → Web**
 
-Then, before exporting:
-
-**Uncheck "Thread Support".**
+**1. Uncheck "Thread Support".**
 
 Not a preference. A threaded export only runs when the page is served with
 `Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy`, and cross-origin
 isolation breaks the wallet provider's iframes and third-party RPC calls. Leave
-it on and you fix the game while breaking the wallet — with no error connecting
+it on and you fix the game while breaking the wallet, with no error connecting
 the two.
 
-If Godot says export templates are missing: **Editor → Manage Export
-Templates… → Download and Install**.
+**2. Set "Head Include" to this single line:**
 
-**Export Project…** → into `test-game/godot-export/` → filename `index.html`.
-
----
-
-## 2. Add the SDK
-
-The export does not know about the bridge. Two things have to join it: the SDK
-file, and a script tag loading it *before* the engine.
-
-From the repository root, in PowerShell:
-
-```powershell
-$export = "test-game\godot-export"
-
-Copy-Item platform-sdk\sga-sdk.js $export -Force
-
-$html = Get-Content "$export\index.html" -Raw
-if ($html -notmatch 'sga-sdk\.js') {
-    $html = $html -replace '(<script src="index\.js")', '<script src="sga-sdk.js"></script>`n    $1'
-    Set-Content "$export\index.html" $html -NoNewline
-    "SDK tag added"
-} else {
-    "SDK tag already present"
-}
+```html
+<script src="https://sga-miniapp.vercel.app/sdk/v1/sga-sdk.js"></script>
 ```
 
-Order matters: `JavaScriptBridge.get_interface("SGA")` runs during `_ready()`, so
-`window.SGA` has to exist before the engine starts.
+Find it under the **HTML** section of the Web preset.
 
-**Re-run this after every export.** Godot overwrites `index.html` each time, so
-the tag disappears and the bridge silently stops working — the game still runs,
-it just never learns the player's name.
+Godot injects that into `<head>` of every export it generates. The engine script
+sits at the end of `<body>`, so the SDK is always loaded first — which is the
+ordering `JavaScriptBridge.get_interface("SGA")` depends on during `_ready()`.
 
----
+This replaces the old routine of copying `sga-sdk.js` into the export folder and
+hand-editing `index.html` after every single export. That step was forgotten
+constantly, and it fails silently: the game runs perfectly and simply never
+learns the player's name.
 
-## 3. Deploy
-
-Reuse the Vercel project already pointing at this repo rather than creating a
-second one. Same origin means no new catalogue entry and no CSP change.
-
-Vercel → **sga-test-game** → Settings → **Root Directory** → change
-`test-game/web` to `test-game/godot-export` → Save → **Redeploy**.
-
-The HTML harness stays in the repo. Point the root directory back at
-`test-game/web` any time you want it again.
+Both settings are stored in `export_presets.cfg`, so they survive reopening the
+project — but that file is per-project. A new game needs both set again.
 
 ---
 
-## 4. Play it
+## Why the SDK loads from a URL
 
-Telegram → your bot → Play → Games → **Bridge Test**.
+The shell serves it at a fixed, versioned path rather than each game shipping its
+own copy.
 
-| What you should see | What it proves |
-|---|---|
-| Your Telegram name in the top-left | `handshake` and `getPlayer` completed |
-| A buzz on every hit | `haptic` survives being called ~50 times a round |
-| "Leave game" returns to the catalogue | `exit` — the shell navigates, not the game |
+- **No copying.** Nothing to forget, nothing to get out of date.
+- **One place to fix a bug.** A bridge fix reaches two hundred games on the next
+  page load, instead of two hundred re-exports that nobody will do.
+- **`/v1/` is a promise.** Games exported today keep loading `v1` forever. A
+  breaking protocol change ships as `/v2/` alongside it, and old games go on
+  working untouched.
 
-The name is the interesting one. Godot has no way to know it; it came through
-the bridge, from the shell, over `postMessage`.
-
-If the HUD says `player` rather than your name, the bridge did not connect —
-almost always the missing script tag from step 2.
+The cost: a game cannot connect to the bridge if the shell is unreachable. That
+is not a real loss — a game with no shell has no player, no wallet and no way
+back to Telegram anyway.
 
 ---
 
-## Why a game and not a test screen
+## Every export after that
 
-A row of buttons proves the messages work in isolation. It does not prove they
-work while a frame is rendering, while input is being consumed, or fifty times in
-twenty seconds. Those are the conditions a real game creates, and they are where
-a bridge actually breaks.
+1. **Export Project…** → into your export folder → filename `index.html`
+2. Deploy that folder to its **own origin** (drag it onto Vercel)
+3. Paste the URL into the Mini App's **Catalogue** screen
+
+No file copying. No `index.html` editing. No commits, no redeploys.
+
+---
+
+## Checking it worked
+
+Open the game from the bot. The player's name should appear where the game shows
+it — Godot has no way to know that, so its presence *is* the proof the bridge
+connected.
+
+If Tap Rush shows `bridge: no SGA`, the Head Include is missing or misspelled.
+That is the only thing that produces it once the game is being framed.
+
+---
+
+## One origin per game
+
+Never point two games at the same host. The bridge identifies a game by its
+origin, so two games sharing one cannot be told apart, and a bug in either
+becomes a bug in both.
+
+The Catalogue screen rejects a duplicate origin, and rejects a URL with a path
+for the same reason — `host/game-a` and `host/game-b` are the same origin.

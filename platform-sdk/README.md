@@ -1,12 +1,24 @@
 # PlatformSDK
 
-The game's half of the bridge. One file, no build step: copy `sga-sdk.js` next to
-your Godot HTML export and load it before the engine.
+The game's half of the bridge. Games do not bundle it — the shell serves it at a
+fixed, versioned URL, and Godot injects the tag into every export via the Web
+preset's **Head Include** field:
 
 ```html
-<script src="sga-sdk.js"></script>
-<script src="index.js"></script>   <!-- Godot -->
+<script src="https://sga-miniapp.vercel.app/sdk/v1/sga-sdk.js"></script>
 ```
+
+Set that once per project and every export is bridge-ready. See
+`test-game/godot/EXPORT.md`.
+
+**This file is the source of truth.** `miniapp/scripts/sync-sdk.mjs` copies it to
+`miniapp/public/sdk/v1/` on every build, so the served copy can never be older
+than this one. Edit here, never there.
+
+`/v1/` is a promise: games exported today keep loading it forever. A breaking
+protocol change ships as `/v2/` alongside, and old games keep working without
+being re-exported — which matters at two hundred games, where re-exporting
+everything is not something anyone will do.
 
 ---
 

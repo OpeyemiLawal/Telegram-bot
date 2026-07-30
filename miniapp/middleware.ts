@@ -123,8 +123,16 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Static assets and images are excluded: they carry no markup, cannot frame
-  // anything, and adding a header to each would mean an origins lookup on every
-  // file a page loads.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png).*)"],
+  /**
+   * Static assets are excluded: they carry no markup, cannot frame anything, and
+   * running middleware on each would mean an origins lookup per file a page
+   * loads.
+   *
+   * `/sdk/` especially. That path serves the bridge SDK to every game on the
+   * platform, cross-origin, on every page load of every game — the single most
+   * requested file here. A security policy on a JavaScript response restricts
+   * nothing, so the only thing middleware would add is latency, multiplied by
+   * two hundred games.
+   */
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|sdk/).*)"],
 };
