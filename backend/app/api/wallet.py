@@ -167,10 +167,22 @@ async def connect_wallet(
 class BalanceOut(BaseModel):
     address: str | None
     lamports: int
-    sol: str
-    # Formatted server-side as well as raw, so every surface — the wallet screen,
-    # a game, the bot — shows the same number. Nine decimal places is exactly the
+    # Both the exact value and the display value.
+    #
+    # `sol` is every decimal the chain reports; `sol_display` is what the player
+    # card shows. Formatted here rather than in the client so the wallet screen,
+    # a game and the bot cannot disagree — nine decimal places is exactly the
     # kind of thing two clients round differently.
+    sol: str
+    sol_display: str
+
+    token_symbol: str
+    token_amount: str
+    token_display: str
+    # False when no mint is configured yet. The balance is a truthful zero in
+    # that case, and the client can say why rather than implying the player holds
+    # nothing.
+    token_configured: bool
 
 
 @router.get("/balance", response_model=BalanceOut)
@@ -188,13 +200,31 @@ async def wallet_balance(
     believable one, so reporting it on failure would tell a player their wallet
     is empty when the truth is that we could not ask.
     """
+    symbol = settings.gamer_token_symbol
+    mint = settings.gamer_token_mint.strip()
+
     if not user.wallet_address:
-        return BalanceOut(address=None, lamports=0, sol="0")
+        return BalanceOut(
+            address=None,
+            lamports=0,
+            sol="0",
+            sol_display="0.000",
+            token_symbol=symbol,
+            token_amount="0",
+            token_display="0",
+            token_configured=bool(mint),
+        )
 
     try:
         lamports = await solana.get_lamports(
             user.wallet_address, rpc_url=settings.solana_rpc_url
         )
+
+        token_raw, token_decimals = (0, 0)
+        if mint:
+            token_raw, token_decimals = await solana.get_token_amount(
+                user.wallet_address, mint, rpc_url=settings.solana_rpc_url
+            )
     except solana.SolanaError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -205,6 +235,11 @@ async def wallet_balance(
         address=user.wallet_address,
         lamports=lamports,
         sol=solana.to_sol(lamports),
+        sol_display=solana.to_sol(lamports, places=3),
+        token_symbol=symbol,
+        token_amount=solana.format_units(token_raw, token_decimals),
+        token_display=solana.format_units(token_raw, token_decimals, places=0),
+        token_configured=bool(mint),
     )
 
 

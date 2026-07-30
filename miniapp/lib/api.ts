@@ -252,8 +252,15 @@ export const linkWallet = (proof: WalletLinkProof) =>
 export interface WalletBalance {
   address: string | null;
   lamports: number;
-  /** Formatted server-side so every surface shows the same number. */
+  /** Every decimal the chain reports. */
   sol: string;
+  /** What the player card shows: three decimals, truncated not rounded. */
+  sol_display: string;
+  token_symbol: string;
+  token_amount: string;
+  token_display: string;
+  /** False until the token mint is configured. A truthful zero, not an error. */
+  token_configured: boolean;
 }
 
 /**

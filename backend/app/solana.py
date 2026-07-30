@@ -37,6 +37,11 @@ class SolanaError(Exception):
 
 _cache: dict[str, tuple[int, float]] = {}
 
+# A mint's decimals are fixed for the life of the mint, so this never expires.
+# Kept separate from the amount cache for that reason — expiring it would mean
+# refetching a constant.
+_decimals_cache: dict[str, int] = {}
+
 
 def _cached(address: str) -> int | None:
     entry = _cache.get(address)
@@ -103,15 +108,91 @@ async def get_lamports(address: str, *, rpc_url: str) -> int:
     return lamports
 
 
-def to_sol(lamports: int) -> str:
-    """Lamports as a decimal SOL string, without floating point.
+async def get_token_amount(
+    owner: str, mint: str, *, rpc_url: str
+) -> tuple[int, int]:
+    """Raw amount and decimals of `mint` held by `owner`.
 
-    Formatted from integer arithmetic on purpose. A float cannot hold nine
-    decimal places exactly, so `lamports / 1e9` quietly produces values like
-    0.30000000000000004 — which is a strange thing to show someone about their
-    own money, and worse if it is ever parsed back.
+    Sums every account rather than reading the associated token account alone. A
+    wallet can hold the same mint in more than one account — an older account
+    predating the ATA standard, or one created by an exchange withdrawal — and
+    reading only the canonical one would show a player less than they have.
     """
-    whole, remainder = divmod(abs(lamports), LAMPORTS_PER_SOL)
-    sign = "-" if lamports < 0 else ""
-    fraction = f"{remainder:09d}".rstrip("0")
-    return f"{sign}{whole}.{fraction}" if fraction else f"{sign}{whole}"
+    cache_key = f"{owner}:{mint}"
+    cached = _cached(cache_key)
+    if cached is not None:
+        return cached, _decimals_cache.get(mint, 0)
+
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "getTokenAccountsByOwner",
+        "params": [owner, {"mint": mint}, {"encoding": "jsonParsed"}],
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            response = await client.post(rpc_url, json=payload)
+            response.raise_for_status()
+            body = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("Solana token RPC failed: %s", exc)
+        raise SolanaError("Could not reach the Solana network.") from exc
+
+    if "error" in body:
+        logger.warning("Solana token RPC error: %s", body["error"].get("message"))
+        raise SolanaError("The Solana network rejected the request.")
+
+    total = 0
+    decimals = 0
+
+    try:
+        for account in body["result"]["value"]:
+            info = account["account"]["data"]["parsed"]["info"]["tokenAmount"]
+            total += int(info["amount"])
+            decimals = int(info["decimals"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise SolanaError("Unexpected response from the Solana network.") from exc
+
+    _store(cache_key, total)
+    _decimals_cache[mint] = decimals
+    return total, decimals
+
+
+def format_units(raw: int, decimals: int, *, places: int | None = None) -> str:
+    """A raw on-chain amount as a decimal string, without floating point.
+
+    Integer arithmetic on purpose. A float cannot hold nine decimal places
+    exactly, so `lamports / 1e9` quietly produces values like
+    0.30000000000000004 — a strange thing to show someone about their own money,
+    and worse if it is ever parsed back.
+
+    `places` fixes the number of decimals shown, truncating rather than rounding.
+    Truncation is the honest direction: rounding 0.9996 up to 1.000 tells a
+    player they hold a whole SOL when they do not, and the first thing they will
+    do is try to spend it.
+    """
+    if decimals < 0:
+        raise ValueError("decimals must not be negative")
+
+    scale = 10**decimals
+    whole, remainder = divmod(abs(raw), scale)
+    sign = "-" if raw < 0 else ""
+
+    if decimals == 0:
+        return f"{sign}{whole}"
+
+    fraction = f"{remainder:0{decimals}d}"
+
+    if places is None:
+        fraction = fraction.rstrip("0")
+        return f"{sign}{whole}.{fraction}" if fraction else f"{sign}{whole}"
+
+    if places == 0:
+        return f"{sign}{whole}"
+
+    return f"{sign}{whole}.{fraction[:places]}"
+
+
+def to_sol(lamports: int, *, places: int | None = None) -> str:
+    return format_units(lamports, 9, places=places)

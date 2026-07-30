@@ -52,6 +52,16 @@ class Settings(BaseSettings):
         default="https://api.mainnet-beta.solana.com", alias="SOLANA_RPC_URL"
     )
 
+    # The platform token shown alongside SOL.
+    #
+    # The mint is empty until the token exists, and that is a supported state
+    # rather than a broken one: the balance reads zero and the wallet screen says
+    # so. Making the app require a mint it does not have yet would mean either a
+    # placeholder address — which would read some stranger's token — or a screen
+    # that cannot render.
+    gamer_token_mint: str = Field(default="", alias="GAMER_TOKEN_MINT")
+    gamer_token_symbol: str = Field(default="$Gamer", alias="GAMER_TOKEN_SYMBOL")
+
     # Comma-separated Telegram ids allowed to manage the catalogue.
     #
     # An allowlist in configuration rather than a role column on `users`, because
