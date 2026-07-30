@@ -24,16 +24,10 @@ class Game(BaseModel):
 # Hard-coded until there is a reason for a games table. Move to the DB when
 # you need per-game config (payout rates, min stake, feature flags).
 CATALOGUE: list[Game] = [
-    # Not a game. A harness that exercises every bridge message and prints what
-    # comes back, so the plumbing can be verified before any real game exists.
-    #
-    # Remove it before launch. It is listed here rather than hidden behind a flag
-    # because a flag would be one more thing to get wrong, and an entry in a list
-    # is hard to forget about — it is visible to every player who opens Games.
     Game(
-        slug="bridge-test",
-        title="Bridge Test",
-        tagline="Internal: checks the game bridge end to end.",
+        slug="tap-rush",
+        title="Tap Rush",
+        tagline="Tap the circle before it vanishes. Twenty seconds.",
         embed_url="https://sga-test-game.vercel.app",
         accent="#C89B3C",
         status="live",
