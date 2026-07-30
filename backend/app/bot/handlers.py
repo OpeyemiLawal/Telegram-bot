@@ -11,6 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.bot.keyboards import main_menu, open_app_button
 from app.bot.menu_sync import remember_menu
+from app.config import get_settings
 from app.db import SessionMaker
 from app.models import User
 
@@ -60,8 +61,10 @@ async def _reply_with_menu(message: Message, text: str) -> None:
                 await session.flush()
 
             has_wallet = bool(user.wallet_address)
+            is_admin = message.from_user.id in get_settings().admin_ids
             sent = await message.answer(
-                text, reply_markup=main_menu(has_wallet=has_wallet)
+                text,
+                reply_markup=main_menu(has_wallet=has_wallet, is_admin=is_admin),
             )
 
             await remember_menu(
