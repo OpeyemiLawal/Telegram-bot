@@ -29,9 +29,9 @@ os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./test_sga.db")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.db import create_schema, engine  # noqa: E402
+from app.db import SessionMaker, create_schema, engine  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models import Base  # noqa: E402
+from app.models import Base, GameRecord  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -42,6 +42,19 @@ def client():
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
         await create_schema()
+        async with SessionMaker() as session:
+            session.add(
+                GameRecord(
+                    slug="test-game",
+                    title="Test Game",
+                    tagline="Deterministic catalogue fixture",
+                    embed_url="https://game.test",
+                    accent="#C89B3C",
+                    status="live",
+                    sort_order=1,
+                )
+            )
+            await session.commit()
 
     asyncio.run(reset())
     # Constructed without a `with` block on purpose: that skips the lifespan,
