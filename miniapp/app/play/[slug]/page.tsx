@@ -4,17 +4,24 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 import { Screen } from "@/components/Screen";
-import { getGame, type Game, type Me } from "@/lib/api";
+import { getGame, type Game } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { attachGameBridge } from "@/lib/game-bridge";
-import { tap } from "@/lib/telegram";
+import { enterFullscreen, tap } from "@/lib/telegram";
 
 /**
- * Hosts one game in an iframe and connects it to the shell.
+ * Hosts one game, full-bleed, and connects it to the shell.
  *
- * The shape of this page is the security model. The game occupies a frame on its
- * own origin; the wallet, the session and the API client stay out here. Anything
- * the game needs, it asks for over `postMessage`, and the bridge answers only
- * from a fixed list.
+ * Still an iframe, and that is not a compromise on the fullscreen goal — it is
+ * what makes the goal reachable. Navigating to the game's own URL would leave
+ * the Mini App: no shell, no wallet, no bridge, and no way back into Telegram.
+ * The frame is how a game can occupy the whole screen while the session and the
+ * wallet stay on this side of it.
+ *
+ * So "fullscreen" here is a layout problem. The frame is taken out of the page
+ * flow and pinned to the viewport, the shell's own chrome is not rendered on
+ * this route, and Telegram is asked to drop its header where the client
+ * supports it.
  */
 export default function PlayPage() {
   const router = useRouter();
@@ -23,9 +30,6 @@ export default function PlayPage() {
 
   const [game, setGame] = useState<Game | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loaded, setLoaded] = useState(false);
-
-  const frameRef = useRef<HTMLIFrameElement | null>(null);
 
   const exit = useCallback(() => {
     tap();
@@ -52,71 +56,125 @@ export default function PlayPage() {
     };
   }, [slug]);
 
-  return (
-    <Screen onBack={exit}>
-      {(user) => {
-        if (error) {
-          return (
+  // Requested once for the whole visit rather than when the frame mounts, so
+  // the transition happens during loading instead of jolting the layout the
+  // moment the game appears.
+  useEffect(() => enterFullscreen(), []);
+
+  const { status } = useAuth();
+
+  // Dropping `Screen` for the game also drops the gate it provides, so the gate
+  // is re-applied explicitly. `Screen` renders the boot, outside-Telegram and
+  // failed-sign-in states; deferring to it here keeps one implementation of each
+  // rather than a second set that drifts.
+  if (error || status !== "ready") {
+    return (
+      <Screen onBack={exit}>
+        {() =>
+          error ? (
             <div className="state">
               <h1 className="heading">{error}</h1>
               <button className="button" onClick={exit}>
                 Back to games
               </button>
             </div>
-          );
+          ) : (
+            <div className="skeleton" style={{ height: 320 }} />
+          )
         }
+      </Screen>
+    );
+  }
 
-        if (!game) {
-          return <div className="skeleton" style={{ height: 420 }} />;
-        }
+  // Deliberately outside `Screen`. Screen paints the masthead and page padding,
+  // which is exactly the chrome a game should not be framed by.
+  return <Stage game={game} onExit={exit} />;
+}
 
-        return (
-          <GameFrame
-            game={game}
-            user={user}
-            frameRef={frameRef}
-            loaded={loaded}
-            onLoaded={() => setLoaded(true)}
-            onExit={exit}
-          />
-        );
+function Stage({ game, onExit }: { game: Game | null; onExit: () => void }) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "#0b1620",
+        zIndex: 40,
+        overflow: "hidden",
       }}
-    </Screen>
+    >
+      {game ? <GameFrame game={game} onExit={onExit} /> : <Loading />}
+
+      {/*
+        A floating control rather than a button in a bar below the game.
+        Telegram's own back button is bound too, but on desktop clients it is not
+        always visible, and a player who cannot find the way out of a fullscreen
+        game will close the whole Mini App instead.
+      */}
+      <button
+        onClick={onExit}
+        aria-label="Leave game"
+        style={{
+          position: "absolute",
+          top: "max(10px, env(safe-area-inset-top))",
+          right: 10,
+          zIndex: 2,
+          width: 38,
+          height: 38,
+          borderRadius: 19,
+          border: "1px solid rgba(232,238,244,0.22)",
+          background: "rgba(11,22,32,0.62)",
+          backdropFilter: "blur(6px)",
+          color: "#e8eef4",
+          fontSize: 18,
+          lineHeight: 1,
+          cursor: "pointer",
+        }}
+      >
+        ✕
+      </button>
+    </div>
   );
 }
 
-function GameFrame({
-  game,
-  user,
-  frameRef,
-  loaded,
-  onLoaded,
-  onExit,
-}: {
-  game: Game;
-  user: Me;
-  frameRef: React.MutableRefObject<HTMLIFrameElement | null>;
-  loaded: boolean;
-  onLoaded: () => void;
-  onExit: () => void;
-}) {
-  /**
-   * Held in a ref so the bridge reads current values without being torn down and
-   * rebuilt. Re-attaching the listener whenever the player's wallet changes
-   * would drop any request in flight at that moment.
-   */
-  const playerRef = useRef({ user, onExit });
-  playerRef.current = { user, onExit };
+function Loading() {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        display: "grid",
+        placeItems: "center",
+        color: "#93a8ba",
+        fontSize: 14,
+      }}
+    >
+      Loading…
+    </div>
+  );
+}
+
+function GameFrame({ game, onExit }: { game: Game; onExit: () => void }) {
+  const frameRef = useRef<HTMLIFrameElement | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  const exitRef = useRef(onExit);
+  exitRef.current = onExit;
 
   /**
-   * The game needs our origin to address its messages, and to know which origin
-   * to accept answers from. Passed as a query parameter rather than left to
-   * `document.referrer`, because this iframe sets `referrer-policy: no-referrer`
-   * — the referrer fallback in the SDK exists for local development and is
-   * deliberately unavailable here.
+   * Read into a ref rather than closed over by the bridge effect.
    *
-   * A query parameter is safe to hand over: the game's own origin is already
-   * public, and so is ours.
+   * The bridge must not be torn down and rebuilt when the player links a wallet
+   * mid-game — that would drop any request in flight. The ref lets the handler
+   * see current values while the listener stays attached for the game's life.
+   */
+  const { user } = useAuth();
+  const playerRef = useRef(user);
+  playerRef.current = user;
+
+  /**
+   * The game needs our origin to address its messages, and to know whose replies
+   * to accept. Passed as a query parameter rather than left to
+   * `document.referrer`, because this iframe sets `referrer-policy: no-referrer`.
    */
   const frameSrc = useMemo(() => {
     try {
@@ -135,73 +193,48 @@ function GameFrame({
     return attachGameBridge(frame, {
       gameSlug: game.slug,
       embedUrl: game.embed_url,
+      // Public facts only. There is no shape of this object that can carry a
+      // token, which is the point.
       player: () => ({
-        displayName: playerRef.current.user.display_name,
-        walletAddress: playerRef.current.user.wallet_address,
+        displayName: playerRef.current?.display_name ?? "player",
+        walletAddress: playerRef.current?.wallet_address ?? null,
       }),
-      onExit: () => playerRef.current.onExit(),
+      onExit: () => exitRef.current(),
     });
-  }, [game.slug, game.embed_url, frameRef]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game.slug, game.embed_url]);
 
   return (
-    <div style={{ position: "relative" }}>
-      {!loaded && (
-        <div
-          className="skeleton"
-          style={{ position: "absolute", inset: 0, borderRadius: 12 }}
-          aria-hidden
-        />
-      )}
-
+    <>
+      {!loaded && <Loading />}
       <iframe
         ref={frameRef}
         src={frameSrc}
         title={game.title}
-        onLoad={onLoaded}
+        onLoad={() => setLoaded(true)}
         /**
-         * Scripts and same-origin only.
+         * `allow-same-origin` grants the frame its *own* origin — which is what
+         * gives Godot localStorage and IndexedDB — not access to ours.
          *
-         * `allow-same-origin` sounds alarming and is not: it grants the frame its
-         * *own* origin, which is what gives the game localStorage and IndexedDB —
-         * Godot's HTML export needs both. It does not grant access to ours.
-         *
-         * Absent, and deliberately: `allow-top-navigation` would let a game
-         * replace the Mini App with any page it liked, and `allow-popups` would
-         * let it open windows outside Telegram. A game has no legitimate need for
-         * either; it asks the shell to navigate via the `exit` message instead.
+         * Absent deliberately: `allow-top-navigation` would let a game replace
+         * the Mini App with any page, and `allow-popups` would let it open
+         * windows outside Telegram. Neither has a legitimate use; a game asks the
+         * shell to navigate with the `exit` message instead.
          */
         sandbox="allow-scripts allow-same-origin"
-        /**
-         * No camera, microphone, geolocation or payment APIs. Permissions
-         * delegate to a frame by default, so an empty allow list is what actually
-         * withholds them.
-         */
         allow=""
         referrerPolicy="no-referrer"
         style={{
+          position: "absolute",
+          inset: 0,
           width: "100%",
-          aspectRatio: "9 / 16",
-          maxHeight: "72vh",
+          height: "100%",
           border: 0,
-          borderRadius: 12,
           display: "block",
           background: "#0b1620",
         }}
       />
-
-      <div className="wallet-panel__actions" style={{ marginTop: 12 }}>
-        <button className="button button--quiet" onClick={onExit}>
-          Leave game
-        </button>
-      </div>
-
-      <div className="notice" style={{ marginTop: 12 }}>
-        <p className="body">
-          {user.wallet_address
-            ? "This game can see your public wallet address. It cannot move funds — every transaction is approved by you, in your wallet."
-            : "You have not linked a wallet yet. This game runs without one."}
-        </p>
-      </div>
-    </div>
+    </>
   );
 }
+

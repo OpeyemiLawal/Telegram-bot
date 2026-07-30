@@ -37,6 +37,15 @@ interface TelegramWebApp {
   /** For `tg://` and `https://t.me/...` only. Stays inside Telegram. */
   openTelegramLink?(url: string): void;
 
+  /**
+   * Bot API 8.0. Optional because older Telegram clients do not have it, and a
+   * game must still be playable there — the CSS overlay already fills the
+   * WebView, so this only reclaims Telegram's own header.
+   */
+  requestFullscreen?(): void;
+  exitFullscreen?(): void;
+  isFullscreen?: boolean;
+
   ready(): void;
   expand(): void;
   close(): void;
@@ -152,6 +161,35 @@ export function tap(style: HapticStyle = "light"): void {
 
 export function notify(type: "error" | "success" | "warning"): void {
   webApp()?.HapticFeedback?.notificationOccurred(type);
+}
+
+/**
+ * Ask Telegram for its own chrome back, for the duration of a game.
+ *
+ * Returns a cleanup function that restores the normal view. Both calls are
+ * optional at runtime: `requestFullscreen` arrived in Bot API 8.0, and a client
+ * older than that must still be able to play. The CSS overlay already fills the
+ * WebView on its own — this only reclaims the header Telegram draws above it.
+ */
+export function enterFullscreen(): () => void {
+  const app = webApp();
+  if (!app || typeof app.requestFullscreen !== "function") return () => {};
+
+  try {
+    app.requestFullscreen();
+  } catch {
+    // Some clients advertise the method and reject the request, typically on a
+    // surface where fullscreen makes no sense. Not worth surfacing to a player.
+    return () => {};
+  }
+
+  return () => {
+    try {
+      app.exitFullscreen?.();
+    } catch {
+      /* leaving the game matters more than restoring chrome cleanly */
+    }
+  };
 }
 
 /** Wire Telegram's native back button to a handler. Returns a cleanup fn. */
