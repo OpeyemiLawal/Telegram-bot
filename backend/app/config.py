@@ -38,6 +38,18 @@ class Settings(BaseSettings):
     initdata_max_age: int = Field(default=86_400, alias="INITDATA_MAX_AGE")
     environment: str = Field(default="development", alias="ENVIRONMENT")
 
+    # Comma-separated Telegram ids allowed to manage the catalogue.
+    #
+    # An allowlist in configuration rather than a role column on `users`, because
+    # a role column has to be granted by something, and that something is another
+    # admin endpoint — a chicken-and-egg that usually resolves into a seeded
+    # superuser nobody remembers creating. An env var is granted by whoever can
+    # deploy, which is the correct authority and already audited.
+    #
+    # Empty means nobody. That is the right default: an admin API that is open
+    # until configured is open in every environment somebody forgot to configure.
+    admin_telegram_ids: str = Field(default="", alias="ADMIN_TELEGRAM_IDS")
+
     # Writes failing initData payloads to last_initdata.txt for
     # diagnose_initdata.py. Development only.
     debug_auth: bool = Field(default=False, alias="DEBUG_AUTH")
@@ -132,6 +144,22 @@ class Settings(BaseSettings):
         if not value.startswith("https://"):
             raise ValueError("MINIAPP_URL must be https:// — use a tunnel in dev")
         return value.rstrip("/")
+
+    @property
+    def admin_ids(self) -> set[int]:
+        ids: set[int] = set()
+        for raw in self.admin_telegram_ids.split(","):
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                ids.add(int(raw))
+            except ValueError:
+                # A typo must not silently widen or narrow the set in a way that
+                # looks deliberate. Skipping the bad entry keeps the rest working
+                # and the mistake visible the first time that admin is refused.
+                continue
+        return ids
 
     @property
     def cors_origins(self) -> list[str]:

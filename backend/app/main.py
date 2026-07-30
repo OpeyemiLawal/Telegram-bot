@@ -8,7 +8,7 @@ from aiogram.types import Update
 from fastapi import APIRouter, FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, games, wallet
+from app.api import admin, auth, games, public, wallet
 from app.bot.instance import bot, dispatcher
 from app.bot.keyboards import persistent_menu_button
 from app.config import get_settings
@@ -82,7 +82,10 @@ app.add_middleware(
     # Explicit list, never "*". The Mini App sends credentials.
     allow_origins=settings.cors_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    # PUT is here for the admin catalogue editor. Omitting it fails only on the
+    # preflight, which the browser reports as a generic network error with no
+    # mention of the method — a slow thing to diagnose from the client side.
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
     max_age=600,
 )
@@ -91,6 +94,8 @@ api = APIRouter(prefix="/api")
 api.include_router(auth.router)
 api.include_router(games.router)
 api.include_router(wallet.router)
+api.include_router(admin.router)
+api.include_router(public.router)
 app.include_router(api)
 
 

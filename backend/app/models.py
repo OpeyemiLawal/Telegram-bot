@@ -3,7 +3,15 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, String
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -87,6 +95,53 @@ class RefreshToken(Base):
         if self.revoked_at is not None or self.rotated_at is not None:
             return False
         return _as_utc(self.expires_at) > _utcnow()
+
+
+class GameRecord(Base):
+    """A game in the catalogue.
+
+    Moved out of a Python list because that list was the bottleneck: adding a
+    game meant a code change, a review, a backend deploy, and a frontend rebuild
+    for the CSP. At a couple of games that is tolerable. At two hundred it is the
+    whole job.
+
+    `embed_url` is the field that matters most for the future. It means the
+    platform does not care where a game is hosted — moving every game from
+    per-project Vercel deployments to wildcard subdomains on object storage is
+    two hundred rows updated, not a rewrite.
+    """
+
+    __tablename__ = "games"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+
+    # URL-safe identity, and the routing key for /play/<slug>. Immutable in
+    # practice: changing it breaks any link a player has already shared.
+    slug: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+
+    title: Mapped[str] = mapped_column(String(120))
+    tagline: Mapped[str] = mapped_column(String(240), default="")
+
+    # Origin the build is served from. One game per origin, always — the bridge
+    # identifies a game by its origin, so two games sharing one cannot be told
+    # apart, and a bug in either becomes a bug in both.
+    embed_url: Mapped[str] = mapped_column(String(512))
+
+    accent: Mapped[str] = mapped_column(String(16), default="#C89B3C")
+
+    # "live" | "soon" | "hidden". Hidden is the useful one: it takes a game out
+    # of the catalogue without deleting the row, so a broken game can be pulled
+    # in seconds and restored without re-entering anything.
+    status: Mapped[str] = mapped_column(String(16), default="soon", index=True)
+
+    # Display order, low first. Explicit rather than by creation date, because
+    # the newest game is rarely the one you want at the top.
+    sort_order: Mapped[int] = mapped_column(Integer, default=100)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
 
 
 class BotMenuMessage(Base):
