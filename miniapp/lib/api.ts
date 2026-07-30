@@ -249,5 +249,21 @@ export const linkWallet = (proof: WalletLinkProof) =>
     body: JSON.stringify(proof),
   });
 
+export interface WalletBalance {
+  address: string | null;
+  lamports: number;
+  /** Formatted server-side so every surface shows the same number. */
+  sol: string;
+}
+
+/**
+ * Read from the chain, not from a database.
+ *
+ * A 503 means the RPC was unreachable — deliberately not a zero, because zero is
+ * a real balance and a believable one. Telling someone their wallet is empty
+ * when the truth is "we could not ask" is the worse failure by a distance.
+ */
+export const getWalletBalance = () => request<WalletBalance>("/wallet/balance");
+
 export const unlinkWallet = () =>
   request<void>("/wallet", { method: "DELETE" });

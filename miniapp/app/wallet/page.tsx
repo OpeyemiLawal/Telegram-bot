@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -15,6 +15,7 @@ import { PlayerCard } from "@/components/PlayerCard";
 import { Screen } from "@/components/Screen";
 import {
   createWalletChallenge,
+  getWalletBalance,
   linkWallet,
   unlinkWallet,
   type Me,
@@ -36,6 +37,72 @@ import {
 
 function shortAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-6)}`;
+}
+
+/**
+ * The linked wallet's SOL balance, read from the chain.
+ *
+ * Three states, and the third is the one that matters: unlinked, a number, or
+ * "couldn't reach the network". That last one is shown as itself rather than as
+ * a zero — zero is a real balance and a believable one, so showing it on failure
+ * tells a player their wallet is empty when the truth is that we could not ask.
+ */
+function Balance({ hasWallet }: { hasWallet: boolean }) {
+  const [sol, setSol] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const refresh = useCallback(async () => {
+    if (!hasWallet) return;
+    setLoading(true);
+    setFailed(false);
+    try {
+      const balance = await getWalletBalance();
+      setSol(balance.sol);
+    } catch {
+      setFailed(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [hasWallet]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  if (!hasWallet) return null;
+
+  return (
+    <div className="wallet-panel" style={{ marginBottom: 16 }}>
+      <span className="eyebrow">Balance</span>
+
+      <p
+        className="wallet-panel__address"
+        style={{ fontVariantNumeric: "tabular-nums" }}
+      >
+        {failed ? "—" : sol === null ? "…" : `${sol} SOL`}
+      </p>
+
+      <p className="body">
+        {failed
+          ? "Could not reach the Solana network. Your funds are unaffected."
+          : "Held in your own wallet. We only read it."}
+      </p>
+
+      <div className="wallet-panel__actions">
+        <button
+          className="button button--quiet"
+          disabled={loading}
+          onClick={() => {
+            tap();
+            void refresh();
+          }}
+        >
+          {loading ? "Checking…" : "Refresh"}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -693,6 +760,7 @@ export default function WalletPage() {
           </h1>
 
           <PlayerCard user={user} />
+          <Balance hasWallet={Boolean(user.wallet_address)} />
           <WalletConnector user={user} updateUser={updateUser} />
 
           <div className="stack">

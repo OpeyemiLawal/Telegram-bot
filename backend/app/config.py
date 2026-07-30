@@ -38,6 +38,20 @@ class Settings(BaseSettings):
     initdata_max_age: int = Field(default=86_400, alias="INITDATA_MAX_AGE")
     environment: str = Field(default="development", alias="ENVIRONMENT")
 
+    # Solana JSON-RPC endpoint used to read balances.
+    #
+    # The public endpoint is the default because it needs no account and works
+    # immediately. It is also aggressively rate limited and explicitly not for
+    # production traffic — Helius, QuickNode and Triton all give a free key that
+    # will not start returning 429s the moment more than a handful of players
+    # open the wallet screen at once.
+    #
+    # Read-only. Nothing here can move funds, and no key that could belongs in
+    # this application.
+    solana_rpc_url: str = Field(
+        default="https://api.mainnet-beta.solana.com", alias="SOLANA_RPC_URL"
+    )
+
     # Comma-separated Telegram ids allowed to manage the catalogue.
     #
     # An allowlist in configuration rather than a role column on `users`, because

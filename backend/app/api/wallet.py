@@ -18,6 +18,7 @@ from app.api.deps import current_user
 from app.bot.menu_sync import announce, refresh_menu
 from app.config import Settings, get_settings
 from app.db import get_session
+from app import solana
 from app.models import User, WalletChallenge
 from app.security.rate_limit import rate_limit, wallet_limiter
 
@@ -161,6 +162,50 @@ async def connect_wallet(
     )
 
     return _to_out(user)
+
+
+class BalanceOut(BaseModel):
+    address: str | None
+    lamports: int
+    sol: str
+    # Formatted server-side as well as raw, so every surface — the wallet screen,
+    # a game, the bot — shows the same number. Nine decimal places is exactly the
+    # kind of thing two clients round differently.
+
+
+@router.get("/balance", response_model=BalanceOut)
+async def wallet_balance(
+    user: User = Depends(current_user),
+    settings: Settings = Depends(get_settings),
+) -> BalanceOut:
+    """What the player's linked wallet holds, read from the chain.
+
+    Read-only in the strongest sense: this service holds no key for that address
+    and there is no code path here that could produce a transaction. Showing a
+    balance is the whole feature.
+
+    An unreachable RPC is a 503, never a zero. Zero is a real balance and a
+    believable one, so reporting it on failure would tell a player their wallet
+    is empty when the truth is that we could not ask.
+    """
+    if not user.wallet_address:
+        return BalanceOut(address=None, lamports=0, sol="0")
+
+    try:
+        lamports = await solana.get_lamports(
+            user.wallet_address, rpc_url=settings.solana_rpc_url
+        )
+    except solana.SolanaError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Could not read your balance right now. Try again shortly.",
+        ) from exc
+
+    return BalanceOut(
+        address=user.wallet_address,
+        lamports=lamports,
+        sol=solana.to_sol(lamports),
+    )
 
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
