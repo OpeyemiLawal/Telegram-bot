@@ -67,6 +67,15 @@ var _radius := START_RADIUS
 
 var _player_name := "player"
 
+## Why the bridge is or is not working, shown on screen.
+##
+## Printed rather than logged because there is no console to read. Telegram's
+## mobile WebView has no devtools, and each attempt at diagnosing this from the
+## outside costs a full 35 MB export and redeploy. A word in the corner turns
+## that loop into a glance.
+var _bridge_state := "starting"
+
+var _status: Label
 var _top_bar: HBoxContainer
 var _hud: Label
 var _timer_label: Label
@@ -144,6 +153,8 @@ func _apply_scale() -> void:
 	_subtitle.add_theme_font_size_override("font_size", int(22.0 * u))
 	_primary.add_theme_font_size_override("font_size", int(26.0 * u))
 	_leave_button.add_theme_font_size_override("font_size", int(22.0 * u))
+	_status.add_theme_font_size_override("font_size", int(18.0 * u))
+	_status.offset_bottom = -PADDING * u
 
 	# Wide enough to read, never wider than the screen it sits on.
 	_banner.custom_minimum_size = Vector2(clampf(size.x * 0.82, 240.0, 520.0), 0.0)
@@ -163,21 +174,48 @@ func _apply_scale() -> void:
 
 func _connect_bridge() -> void:
 	if not OS.has_feature("web"):
+		_bridge_state = "editor"
 		return  # editor run; the game is still fully playable
 
 	_sdk = JavaScriptBridge.get_interface("SGA")
-	if _sdk == null or not _sdk.isAvailable():
+
+	if _sdk == null:
+		# sga-sdk.js did not load, or loaded after the engine. Godot rewrites
+		# index.html on every export, so the script tag is the first thing to
+		# check when this appears.
+		_bridge_state = "no SGA"
+		return
+
+	if not _sdk.isAvailable():
+		# The SDK is present but has no shell to talk to: either the game is not
+		# in an iframe, or ?sgaOrigin= is missing from the URL.
+		_bridge_state = "no shell"
 		_sdk = null
 		return
 
+	_bridge_state = "handshaking"
 	_cb_handshake = JavaScriptBridge.create_callback(_on_handshake)
 	_sdk.handshake(_cb_handshake)
 
 
 func _on_handshake(args: Array) -> void:
 	var info = args[0]
-	if info.get("error"):
+
+	# Read the property directly rather than through `Object.get()`.
+	#
+	# A JavaScriptObject resolves unknown properties to null via `_get`, so
+	# `info.error` is the supported way to ask. `info.get("error")` routes through
+	# Godot's own Object.get, which is not the same lookup and pushes an error for
+	# a property Godot does not know about — enough to abort this handler before
+	# it ever requests the player, leaving the HUD reading "player" with nothing
+	# logged to say why.
+	if info == null or info.error != null:
+		_bridge_state = "handshake failed"
+		_update_hud()
 		return
+
+	_bridge_state = "asking"
+	_update_hud()
 
 	_cb_player = JavaScriptBridge.create_callback(_on_player)
 	_sdk.getPlayer(_cb_player)
@@ -185,10 +223,14 @@ func _on_handshake(args: Array) -> void:
 
 func _on_player(args: Array) -> void:
 	var player = args[0]
-	if player.get("error"):
+
+	if player == null or player.error != null:
+		_bridge_state = "player failed"
+		_update_hud()
 		return
 
 	_player_name = str(player.displayName)
+	_bridge_state = "ok"
 	_update_hud()
 
 
@@ -309,6 +351,14 @@ func _build_ui() -> void:
 	_timer_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_top_bar.add_child(_timer_label)
 
+	_status = Label.new()
+	_status.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	_status.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_status.add_theme_color_override("font_color", MUTED)
+	_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_status)
+
 	_banner = VBoxContainer.new()
 	_banner.set_anchors_and_offsets_preset(
 		Control.PRESET_CENTER, Control.PRESET_MODE_KEEP_SIZE
@@ -350,6 +400,8 @@ func _show_banner(title: String, subtitle: String, action: String) -> void:
 func _update_hud() -> void:
 	_hud.text = "%s   %d" % [_player_name, _score]
 	_timer_label.text = "%0.1fs" % maxf(_time_left, 0.0) if _playing else ""
+	if _status:
+		_status.text = "bridge: %s" % _bridge_state
 
 
 func _leave() -> void:
