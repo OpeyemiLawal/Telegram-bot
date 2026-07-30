@@ -358,3 +358,22 @@ body {
   font-size: 13px;
   line-height: 1.4;
 }
+
+/* Admin form controls.
+   Kept minimal and inheriting the app's palette rather than styled per field —
+   this screen is a tool for one person, and every rule here is a rule to
+   maintain against a design system it does not belong to. */
+.admin-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--line, #23384a);
+  background: var(--panel, #12212e);
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+}
+.admin-input:focus {
+  outline: none;
+  border-color: var(--gold, #c89b3c);
+}

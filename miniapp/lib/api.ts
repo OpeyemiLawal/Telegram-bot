@@ -182,6 +182,47 @@ export const getGames = () => request<Game[]>("/games");
 export const getGame = (slug: string) =>
   request<Game>(`/games/${encodeURIComponent(slug)}`);
 
+/**
+ * Catalogue management.
+ *
+ * Every call here 404s for a player who is not on the server's admin allowlist —
+ * not 403. That is deliberate on the server side: a 403 confirms the endpoint
+ * exists and that this account merely lacks access, which is worth nothing to
+ * the owner and something to anyone probing.
+ *
+ * The consequence for this client is that "not an admin" and "no such thing"
+ * are indistinguishable, and the admin screen treats them the same way.
+ */
+export interface AdminGame {
+  slug: string;
+  title: string;
+  tagline: string;
+  embed_url: string;
+  accent: string;
+  status: "live" | "soon" | "hidden";
+  sort_order: number;
+}
+
+/** Includes hidden games, which the player-facing catalogue omits. */
+export const adminListGames = () => request<AdminGame[]>("/admin/games");
+
+export const adminCreateGame = (game: AdminGame) =>
+  request<AdminGame>("/admin/games", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(game),
+  });
+
+export const adminUpdateGame = (slug: string, game: AdminGame) =>
+  request<AdminGame>(`/admin/games/${encodeURIComponent(slug)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(game),
+  });
+
+export const adminDeleteGame = (slug: string) =>
+  request<void>(`/admin/games/${encodeURIComponent(slug)}`, { method: "DELETE" });
+
 export interface WalletChallenge {
   nonce: string;
   message: string;
