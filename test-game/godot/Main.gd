@@ -75,6 +75,10 @@ var _player_name := "player"
 ## that loop into a glance.
 var _bridge_state := "starting"
 
+## The banner's own text, kept apart from the bridge line appended to it, so the
+## state can be refreshed without losing the message underneath.
+var _subtitle_base := ""
+
 var _status: Label
 var _top_bar: HBoxContainer
 var _hud: Label
@@ -154,6 +158,10 @@ func _apply_scale() -> void:
 	_primary.add_theme_font_size_override("font_size", int(26.0 * u))
 	_leave_button.add_theme_font_size_override("font_size", int(22.0 * u))
 	_status.add_theme_font_size_override("font_size", int(18.0 * u))
+	# Both offsets, not just the bottom one. A bottom-wide preset anchors top and
+	# bottom to the same edge, so moving only `offset_bottom` upward gives the
+	# label a negative height and it silently never draws.
+	_status.offset_top = -46.0 * u
 	_status.offset_bottom = -PADDING * u
 
 	# Wide enough to read, never wider than the screen it sits on.
@@ -352,7 +360,7 @@ func _build_ui() -> void:
 	_top_bar.add_child(_timer_label)
 
 	_status = Label.new()
-	_status.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	_status.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	_status.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_status.add_theme_color_override("font_color", MUTED)
@@ -391,10 +399,14 @@ func _build_ui() -> void:
 
 func _show_banner(title: String, subtitle: String, action: String) -> void:
 	_title.text = title
-	_subtitle.text = subtitle
+	_subtitle_base = subtitle
 	_primary.text = action
 	_banner.visible = true
 	_update_hud()
+
+
+func _refresh_subtitle() -> void:
+	_subtitle.text = "%s\n\nbridge: %s" % [_subtitle_base, _bridge_state]
 
 
 func _update_hud() -> void:
@@ -402,6 +414,8 @@ func _update_hud() -> void:
 	_timer_label.text = "%0.1fs" % maxf(_time_left, 0.0) if _playing else ""
 	if _status:
 		_status.text = "bridge: %s" % _bridge_state
+	if _subtitle:
+		_refresh_subtitle()
 
 
 func _leave() -> void:
