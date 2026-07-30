@@ -7,13 +7,20 @@
  * whose every request is silently ignored. Loading the real SDK and checking
  * what it emits against the real parser is what catches that.
  */
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import { parseRequest, ok, PROTOCOL_VERSION } from "./bridge-protocol";
 
+// `fileURLToPath`, not `URL.pathname`.
+//
+// On Windows the pathname of a file URL is "/C:/Users/...", with a leading
+// slash, so passing it to readFileSync produces "C:\C:\Users\..." and fails.
+// On Linux the two are identical, which is exactly why this survived being
+// written and only broke on the machine it had to run on.
 const SDK = readFileSync(
-  new URL("../../platform-sdk/sga-sdk.js", import.meta.url).pathname,
+  fileURLToPath(new URL("../../platform-sdk/sga-sdk.js", import.meta.url)),
   "utf8",
 );
 
