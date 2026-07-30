@@ -23,6 +23,7 @@ import { useAuth } from "@/lib/auth";
 import {
   hasInjectedSolanaWallet,
   notify,
+  openExternal,
   tap,
   telegramSurface,
   webApp,
@@ -148,6 +149,81 @@ function ConnectActions({
         </button>
       )}
     </>
+  );
+}
+
+/**
+ * The wallets a player can install, and where to get them.
+ *
+ * Shown to everyone on mobile rather than only to people without a wallet,
+ * because "has a wallet installed" is not something the web can find out. A deep
+ * link either opens an app or silently does nothing — there is no callback, no
+ * error, and no list of installed apps to inspect. Any detection would be a
+ * guess, and a wrong guess here is worse than none: telling someone they need to
+ * install Phantom when they already have it makes the app look broken.
+ *
+ * So it is a quiet, collapsed panel that costs nothing to ignore and is there
+ * the moment someone taps Connect and nothing happens.
+ */
+const WALLETS = [
+  {
+    name: "Phantom",
+    note: "Most widely used on Solana",
+    url: "https://phantom.app/download",
+  },
+  {
+    name: "Solflare",
+    note: "Solana-native, strong mobile app",
+    url: "https://solflare.com/download",
+  },
+  {
+    name: "Backpack",
+    note: "Newer, popular with active traders",
+    url: "https://backpack.app/downloads",
+  },
+];
+
+function NoWalletHelp() {
+  return (
+    <details className="notice" style={{ marginTop: 12 }}>
+      <summary className="body" style={{ cursor: "pointer" }}>
+        Nothing happened, or you don’t have a wallet yet?
+      </summary>
+
+      <p className="body" style={{ marginTop: 10 }}>
+        You need a Solana wallet app installed on this phone. Install one, create
+        or restore a wallet in it, then come back and tap Connect.
+      </p>
+
+      <div className="stack" style={{ marginTop: 12 }}>
+        {WALLETS.map((wallet) => (
+          <button
+            key={wallet.name}
+            className="tile"
+            onClick={() => {
+              tap();
+              // Routed through Telegram rather than a plain link: a normal
+              // navigation would replace the Mini App, taking the session and
+              // the way back with it.
+              openExternal(wallet.url);
+            }}
+          >
+            <span className="tile__body">
+              <span className="heading">{wallet.name}</span>
+              <p className="body">{wallet.note}</p>
+            </span>
+            <span className="tile__chevron" aria-hidden>
+              ↗
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <p className="body" style={{ marginTop: 12, opacity: 0.75 }}>
+        Install from the official site or your app store only. A wallet asking
+        for a seed phrase you did not create is stealing from you.
+      </p>
+    </details>
   );
 }
 
@@ -632,6 +708,11 @@ function ConnectedWalletConnector({
           so this stays invisible until the user has started a connection and
           the escape hatch is genuinely available. */}
       {stage === "choose" && telegramSurface() !== "desktop" && <PairingLink />}
+
+      {/* Mobile only. On desktop the answer is "use your phone or a browser",
+          which DesktopRoutes already says, and installing a phone wallet would
+          not help someone sitting at a desktop client. */}
+      {stage === "choose" && telegramSurface() === "mobile" && <NoWalletHelp />}
 
       <Diagnostics lastError={error} />
     </div>

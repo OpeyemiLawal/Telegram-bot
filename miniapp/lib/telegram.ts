@@ -164,6 +164,30 @@ export function notify(type: "error" | "success" | "warning"): void {
 }
 
 /**
+ * Open an external page outside the WebView.
+ *
+ * A plain link does not reliably work here. Telegram blocks `window.open` on
+ * mobile, and letting an anchor navigate the WebView would replace the Mini App
+ * itself — taking the session, the wallet connection and the way back with it.
+ * `openLink` is the sanctioned route and leaves the app running behind it.
+ *
+ * Falls back to a normal navigation outside Telegram, so the same code works in
+ * a browser during development.
+ */
+export function openExternal(url: string): void {
+  const app = webApp();
+
+  if (app && typeof app.openLink === "function") {
+    app.openLink(url, { try_instant_view: false });
+    return;
+  }
+
+  if (typeof window !== "undefined") {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+}
+
+/**
  * Ask Telegram for its own chrome back, for the duration of a game.
  *
  * Returns a cleanup function that restores the normal view. Both calls are
