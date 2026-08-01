@@ -43,7 +43,7 @@ const START_RADIUS := 120.0
 const MIN_RADIUS := 30.0
 const SHRINK_PER_SECOND := 55.0
 const PADDING := 24.0
-const TOP_BAR := 72.0
+const TOP_BAR := 190.0
 
 const GOLD := Color("#c89b3c")
 const BG := Color("#0b1620")
@@ -65,7 +65,9 @@ var _time_left := 0.0
 var _target_ratio := Vector2(0.5, 0.5)
 var _radius := START_RADIUS
 
-var _player_name := "player"
+var _player_name := "Telegram player"
+var _wallet_address := ""
+var _player_loaded := false
 
 ## Why the bridge is or is not working, shown on screen.
 ##
@@ -83,6 +85,10 @@ var _status: Label
 var _top_bar: HBoxContainer
 var _hud: Label
 var _timer_label: Label
+var _player_card: PanelContainer
+var _player_label: Label
+var _wallet_status_label: Label
+var _wallet_address_label: Label
 var _banner: VBoxContainer
 var _title: Label
 var _subtitle: Label
@@ -151,8 +157,16 @@ func _apply_scale() -> void:
 	_top_bar.offset_right = -PADDING * u
 	_top_bar.offset_top = PADDING * u * 0.8
 
+	_player_card.offset_left = PADDING * u
+	_player_card.offset_right = -PADDING * u
+	_player_card.offset_top = 72.0 * u
+	_player_card.offset_bottom = 174.0 * u
+
 	_hud.add_theme_font_size_override("font_size", int(26.0 * u))
 	_timer_label.add_theme_font_size_override("font_size", int(26.0 * u))
+	_player_label.add_theme_font_size_override("font_size", int(22.0 * u))
+	_wallet_status_label.add_theme_font_size_override("font_size", int(20.0 * u))
+	_wallet_address_label.add_theme_font_size_override("font_size", int(17.0 * u))
 	_title.add_theme_font_size_override("font_size", int(46.0 * u))
 	_subtitle.add_theme_font_size_override("font_size", int(22.0 * u))
 	_primary.add_theme_font_size_override("font_size", int(26.0 * u))
@@ -237,7 +251,11 @@ func _on_player(args: Array) -> void:
 		_update_hud()
 		return
 
-	_player_name = str(player.displayName)
+	_player_name = str(player.displayName).strip_edges()
+	if _player_name.is_empty():
+		_player_name = "Telegram player"
+	_wallet_address = "" if player.walletAddress == null else str(player.walletAddress)
+	_player_loaded = true
 	_bridge_state = "ok"
 	_update_hud()
 
@@ -359,6 +377,37 @@ func _build_ui() -> void:
 	_timer_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_top_bar.add_child(_timer_label)
 
+	_player_card = PanelContainer.new()
+	_player_card.anchor_right = 1.0
+	_player_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var card_style := StyleBoxFlat.new()
+	card_style.bg_color = Color("#132431")
+	card_style.border_color = Color("#294252")
+	card_style.set_border_width_all(1)
+	card_style.set_corner_radius_all(14)
+	card_style.content_margin_left = 18.0
+	card_style.content_margin_right = 18.0
+	card_style.content_margin_top = 12.0
+	card_style.content_margin_bottom = 12.0
+	_player_card.add_theme_stylebox_override("panel", card_style)
+	add_child(_player_card)
+
+	var identity := VBoxContainer.new()
+	identity.add_theme_constant_override("separation", 4)
+	_player_card.add_child(identity)
+
+	_player_label = Label.new()
+	_player_label.add_theme_color_override("font_color", TEXT)
+	identity.add_child(_player_label)
+
+	_wallet_status_label = Label.new()
+	identity.add_child(_wallet_status_label)
+
+	_wallet_address_label = Label.new()
+	_wallet_address_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_wallet_address_label.add_theme_color_override("font_color", MUTED)
+	identity.add_child(_wallet_address_label)
+
 	_status = Label.new()
 	_status.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	_status.grow_vertical = Control.GROW_DIRECTION_BEGIN
@@ -411,11 +460,39 @@ func _refresh_subtitle() -> void:
 
 func _update_hud() -> void:
 	_hud.text = "%s   %d" % [_player_name, _score]
+	if _player_label:
+		if _bridge_state == "player failed":
+			_player_label.text = "Player: Could not load"
+		else:
+			_player_label.text = "Player: %s" % _player_name if _player_loaded else "Player: Loading..."
+	if _wallet_status_label:
+		if _bridge_state == "player failed":
+			_wallet_status_label.text = "Wallet: Unavailable"
+			_wallet_status_label.add_theme_color_override("font_color", Color("#ff7d7d"))
+			_wallet_address_label.text = "Close and reopen the game from the bot."
+		elif not _player_loaded:
+			_wallet_status_label.text = "Wallet: Checking..."
+			_wallet_status_label.add_theme_color_override("font_color", MUTED)
+			_wallet_address_label.text = ""
+		elif _wallet_address.is_empty():
+			_wallet_status_label.text = "Wallet: Not connected"
+			_wallet_status_label.add_theme_color_override("font_color", MUTED)
+			_wallet_address_label.text = "Connect it from the bot Wallet button."
+		else:
+			_wallet_status_label.text = "Wallet: Connected"
+			_wallet_status_label.add_theme_color_override("font_color", Color("#5ee6a8"))
+			_wallet_address_label.text = _short_wallet(_wallet_address)
 	_timer_label.text = "%0.1fs" % maxf(_time_left, 0.0) if _playing else ""
 	if _status:
 		_status.text = "bridge: %s" % _bridge_state
 	if _subtitle:
 		_refresh_subtitle()
+
+
+func _short_wallet(address: String) -> String:
+	if address.length() <= 16:
+		return address
+	return "%s...%s" % [address.left(8), address.right(6)]
 
 
 func _leave() -> void:
