@@ -25,7 +25,7 @@ These settings are already saved in export_presets.cfg for Tap Rush.
 
 ## Export and deploy
 
-1. Export as test-game/godot-export/index.html.
+1. Install Godot 4.3 or newer, then export as test-game/godot-export/index.html. Re-export is required after Main.gd changes because the script is packed into index.pck.
 2. In the Tap Rush Vercel project, set Root Directory to test-game/godot-export.
 3. Deploy.
 4. In Render, set ALLOWED_ORIGINS to:

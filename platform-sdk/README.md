@@ -15,7 +15,7 @@ The source of truth is platform-sdk/sga-sdk.js. The Mini App build copies it to:
 5. The backend returns a short-lived, game-scoped session.
 6. Godot receives only displayName and the already-linked public walletAddress.
 
-The session is stored internally for the browser session. It is never returned to Godot. It cannot call the full account API.
+The session is stored internally for the browser session. It is never returned to Godot. It cannot call the full account API. Reward calls use it internally so a different origin cannot report taps for this game.
 
 ## Add another game
 
@@ -31,6 +31,8 @@ The existing main bot will list the new live game automatically. Do not create a
 - isAvailable(): true inside the direct Telegram app or supported legacy shell.
 - handshake(callback): returns version, gameSlug, and surface.
 - getPlayer(callback): returns displayName and walletAddress.
+- startRewardRound(callback): starts a 20-second server reward window.
+- recordTap(roundId, sequence, elapsedMs, callback): records one successful ordered tap.
 - haptic(style): triggers Telegram haptic feedback.
 - exit(): closes the Telegram Web App.
 

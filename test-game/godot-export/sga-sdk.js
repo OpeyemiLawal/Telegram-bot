@@ -137,6 +137,8 @@
 
   var playerCache = null;
   var authInFlight = null;
+  var gameToken = null;
+  var rewardQueue = Promise.resolve();
 
   function playerResult(body) {
     var player = body && body.player;
@@ -156,17 +158,20 @@
         game_slug: gameSlug,
       }),
     }).then(function (body) {
-      storeToken(body.access_token || null);
+      gameToken = body.access_token || null;
+      storeToken(gameToken);
       return playerResult(body);
     });
   }
 
   function restoreDirect(token) {
+    gameToken = token;
     return apiRequest("/session", {
       headers: { Authorization: "Bearer " + token },
     })
       .then(playerResult)
       .catch(function () {
+        gameToken = null;
         storeToken(null);
         return loginDirect();
       });
@@ -205,6 +210,65 @@
       });
   }
 
+  function ensureDirectAuth() {
+    return new Promise(function (resolve, reject) {
+      getDirectPlayer(function (result) {
+        if (result.ok && gameToken) resolve();
+        else reject(new Error(result.error || "Could not authenticate game."));
+      });
+    });
+  }
+
+  function directAuthorizedRequest(path, options) {
+    return ensureDirectAuth().then(function () {
+      var requestOptions = options || {};
+      requestOptions.headers = Object.assign(
+        {},
+        requestOptions.headers || {},
+        { Authorization: "Bearer " + gameToken },
+      );
+      return apiRequest(path, requestOptions);
+    });
+  }
+
+  function finishDirect(promise, onResult) {
+    promise.then(
+      function (data) {
+        onResult({ ok: true, data: data });
+      },
+      function (error) {
+        onResult({
+          ok: false,
+          error: error && error.message ? error.message : "Reward request failed.",
+        });
+      },
+    );
+  }
+
+  function roundResult(body) {
+    return {
+      roundId: body.round_id,
+      availableAmount: body.available_amount,
+      tokenSymbol: body.token_symbol,
+      rules: {
+        tapsPerReward: body.rules.taps_per_reward,
+        tokensPerReward: body.rules.tokens_per_reward,
+        roundSeconds: body.rules.round_seconds,
+        dailyCap: body.rules.daily_cap,
+      },
+    };
+  }
+
+  function tapResult(body) {
+    return {
+      acceptedTaps: body.accepted_taps,
+      tapProgress: body.tap_progress,
+      earnedNow: body.earned_now,
+      availableAmount: body.available_amount,
+      dailyRemaining: body.daily_remaining,
+      tokenSymbol: body.token_symbol,
+    };
+  }
   function telegramSurface() {
     var platform = telegram && telegram.platform ? telegram.platform : "unknown";
     if (platform === "android" || platform === "ios") return "mobile";
@@ -264,6 +328,46 @@
       bridgeSend("getPlayer", undefined, done);
     },
 
+    startRewardRound: function (callback) {
+      var done = wrap(callback);
+      if (!done) return;
+      if (!directMode) {
+        done({ ok: false, error: "Rewards require a direct Telegram launch." });
+        return;
+      }
+      finishDirect(
+        directAuthorizedRequest("/rewards/rounds", { method: "POST" }).then(roundResult),
+        done,
+      );
+    },
+
+    recordTap: function (roundId, sequence, elapsedMs, callback) {
+      var done = wrap(callback);
+      if (!done) return;
+      if (!directMode) {
+        done({ ok: false, error: "Rewards require a direct Telegram launch." });
+        return;
+      }
+
+      rewardQueue = rewardQueue
+        .catch(function () {
+          /* A rejected tap must not strand the next queued tap. */
+        })
+        .then(function () {
+          return directAuthorizedRequest(
+            "/rewards/rounds/" + encodeURIComponent(String(roundId)) + "/taps",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                sequence: Number(sequence),
+                elapsed_ms: Number(elapsedMs),
+              }),
+            },
+          ).then(tapResult);
+        });
+      finishDirect(rewardQueue, done);
+    },
     haptic: function (style) {
       if (directMode) {
         directHaptic(style || "light");

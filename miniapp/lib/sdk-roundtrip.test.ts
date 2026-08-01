@@ -143,17 +143,40 @@ function loadDirectSdk() {
     },
     fetch: async (url: string, init: RequestInit = {}) => {
       calls.push({ url, init });
+      let body: any = {
+        access_token: "game-token-never-exposed",
+        expires_in: 14400,
+        game_slug: "tap-rush",
+        player: {
+          display_name: "Ada",
+          wallet_address: "WalletPublicAddress",
+        },
+      };
+      if (url.endsWith("/rewards/rounds")) {
+        body = {
+          round_id: "round-1",
+          available_amount: 0,
+          token_symbol: "$Gamer",
+          rules: {
+            taps_per_reward: 5,
+            tokens_per_reward: 100,
+            round_seconds: 20,
+            daily_cap: 10000,
+          },
+        };
+      } else if (url.endsWith("/taps")) {
+        body = {
+          accepted_taps: 5,
+          tap_progress: 0,
+          earned_now: 100,
+          available_amount: 100,
+          daily_remaining: 9900,
+          token_symbol: "$Gamer",
+        };
+      }
       return {
         ok: true,
-        text: async () => JSON.stringify({
-          access_token: "game-token-never-exposed",
-          expires_in: 14400,
-          game_slug: "tap-rush",
-          player: {
-            display_name: "Ada",
-            wallet_address: "WalletPublicAddress",
-          },
-        }),
+        text: async () => JSON.stringify(body),
       };
     },
   };
@@ -214,6 +237,44 @@ describe("SDK direct Telegram mode", () => {
     );
   });
 
+  it("earns through authenticated reward calls without exposing the game token", async () => {
+    const direct = loadDirectSdk();
+    const rounds: any[] = [];
+    const taps: any[] = [];
+
+    direct.sdk.startRewardRound((value: any) => rounds.push(value));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    direct.sdk.recordTap("round-1", 5, 700, (value: any) => taps.push(value));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(rounds[0]).toEqual({
+      roundId: "round-1",
+      availableAmount: 0,
+      tokenSymbol: "$Gamer",
+      rules: {
+        tapsPerReward: 5,
+        tokensPerReward: 100,
+        roundSeconds: 20,
+        dailyCap: 10000,
+      },
+    });
+    expect(taps[0].earnedNow).toBe(100);
+    expect(taps[0].availableAmount).toBe(100);
+
+    const rewardCalls = direct.calls.slice(1);
+    expect(rewardCalls[0].url).toBe(
+      "https://api.test/api/game/rewards/rounds",
+    );
+    expect((rewardCalls[0].init.headers as any).Authorization).toBe(
+      "Bearer game-token-never-exposed",
+    );
+    expect(JSON.stringify(rounds) + JSON.stringify(taps)).not.toContain(
+      "game-token-never-exposed",
+    );
+  });
   it("uses Telegram haptics and closes the direct game", () => {
     const direct = loadDirectSdk();
 

@@ -13,10 +13,14 @@ import type { Provider } from "@reown/appkit-adapter-solana/react";
 import { PlayerCard } from "@/components/PlayerCard";
 import { Screen } from "@/components/Screen";
 import {
+  claimGamerTokens,
   createWalletChallenge,
+  getRewardSummary,
   linkWallet,
   unlinkWallet,
   type Me,
+  type RewardClaim,
+  type RewardSummary,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import {
@@ -713,6 +717,97 @@ function ConnectedWalletConnector({
   );
 }
 
+function RewardsPanel({ user }: { user: Me }) {
+  const [summary, setSummary] = useState<RewardSummary | null>(null);
+  const [claim, setClaim] = useState<RewardClaim | null>(null);
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      setSummary(await getRewardSummary());
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load rewards.");
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function claimAll() {
+    setWorking(true);
+    setError(null);
+    try {
+      const result = await claimGamerTokens();
+      setClaim(result);
+      notify(result.status === "confirmed" ? "success" : "warning");
+      await load();
+    } catch (err) {
+      notify("error");
+      setError(err instanceof Error ? err.message : "Could not claim rewards.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  if (!summary && !error) {
+    return <div className="skeleton" style={{ height: 170, marginTop: 16 }} />;
+  }
+
+  const symbol = summary?.token_symbol ?? "$Gamer";
+  const available = summary?.available_amount ?? 0;
+
+  return (
+    <section className="wallet-panel" aria-label="Game rewards">
+      <span className="eyebrow">Game rewards</span>
+      <p className="wallet-panel__address">
+        {available.toLocaleString()} {symbol}
+      </p>
+      <p className="body">Every 5 accepted Tap Rush taps earns 100 {symbol}.</p>
+
+      {summary && summary.pending_amount > 0 && (
+        <p className="body">
+          Pending transfer: {summary.pending_amount.toLocaleString()} {symbol}
+        </p>
+      )}
+
+      {!user.wallet_address && (
+        <p className="body">Connect a wallet before claiming.</p>
+      )}
+
+      {summary && !summary.claims_enabled && (
+        <p className="body">
+          Earning is active. On-chain claims unlock after the devnet reward
+          treasury is configured.
+        </p>
+      )}
+
+      {claim && <p className="body">{claim.message}</p>}
+      {error && <p className="wallet-panel__error">{error}</p>}
+
+      <div className="wallet-panel__actions">
+        <button
+          className="button"
+          disabled={working || !summary?.can_claim}
+          onClick={() => void claimAll()}
+        >
+          {working ? "Sending..." : "Claim to linked wallet"}
+        </button>
+        {claim?.explorer_url && (
+          <button
+            className="button button--quiet"
+            onClick={() => openExternal(claim.explorer_url!)}
+          >
+            View on Solana
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function WalletConnector({
   user,
   updateUser,
@@ -769,6 +864,7 @@ export default function WalletPage() {
 
           <PlayerCard user={user} />
           <WalletConnector user={user} updateUser={updateUser} />
+          <RewardsPanel user={user} />
 
           <div className="stack">
             <button className="tile" disabled>

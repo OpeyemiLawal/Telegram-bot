@@ -144,6 +144,65 @@ class GameRecord(Base):
     )
 
 
+class RewardAccount(Base):
+    """Off-chain Gamer Token earnings waiting to be claimed on Solana."""
+
+    __tablename__ = "reward_accounts"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    available_amount: Mapped[int] = mapped_column(BigInteger, default=0)
+    lifetime_earned: Mapped[int] = mapped_column(BigInteger, default=0)
+    lifetime_claimed: Mapped[int] = mapped_column(BigInteger, default=0)
+    daily_earned: Mapped[int] = mapped_column(BigInteger, default=0)
+    daily_window_start: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
+class GameRewardRound(Base):
+    """One short server-tracked play window used to validate rewarded taps."""
+
+    __tablename__ = "game_reward_rounds"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    game_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("games.id", ondelete="CASCADE"), index=True
+    )
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    accepted_taps: Mapped[int] = mapped_column(Integer, default=0)
+    last_client_elapsed_ms: Mapped[int] = mapped_column(Integer, default=0)
+    last_tap_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    awarded_amount: Mapped[int] = mapped_column(BigInteger, default=0)
+
+
+class RewardClaim(Base):
+    """A debited reward payout and its Solana transaction state."""
+
+    __tablename__ = "reward_claims"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    wallet_address: Mapped[str] = mapped_column(String(64))
+    amount: Mapped[int] = mapped_column(BigInteger)
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    signature: Mapped[str | None] = mapped_column(String(128), unique=True)
+    last_error: Mapped[str | None] = mapped_column(String(240))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
 class BotMenuMessage(Base):
     """Where the bot last drew this user's menu, so it can be redrawn.
 

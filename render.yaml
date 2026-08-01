@@ -73,8 +73,9 @@ services:
         sync: false
       - key: MINIAPP_URL
         sync: false
+      # Both Telegram Web App origins call this API directly.
       - key: ALLOWED_ORIGINS
-        sync: false
+        value: https://sga-miniapp.vercel.app,https://sga-test-game.vercel.app
 
       # Must match this service's real URL exactly — it is what gets registered
       # with Telegram as the webhook. If you rename the service, change this.
@@ -97,3 +98,22 @@ services:
       # Off in production. The capture file contains a real user profile.
       - key: DEBUG_AUTH
         value: "0"
+
+      # Start rewards on devnet. Claims remain disabled until these secrets are
+      # configured and the dedicated treasury token account is funded.
+      - key: SOLANA_RPC_URL
+        value: https://api.mainnet-beta.solana.com
+      - key: REWARD_RPC_URL
+        value: https://api.devnet.solana.com
+      - key: GAMER_TOKEN_SYMBOL
+        value: $Gamer
+      - key: GAMER_TOKEN_MINT
+        sync: false
+      - key: GAMER_TREASURY_KEYPAIR
+        sync: false
+      - key: REWARDS_CLAIMS_ENABLED
+        sync: false
+      - key: REWARD_DAILY_CAP
+        value: "10000"
+      - key: REWARD_MIN_CLAIM
+        value: "100"

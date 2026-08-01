@@ -53,6 +53,8 @@ const MUTED := Color("#93a8ba")
 var _sdk: JavaScriptObject = null
 var _cb_handshake: JavaScriptObject
 var _cb_player: JavaScriptObject
+var _cb_reward_start: JavaScriptObject
+var _cb_reward_tap: JavaScriptObject
 
 var _playing := false
 var _score := 0
@@ -68,6 +70,12 @@ var _radius := START_RADIUS
 var _player_name := "Telegram player"
 var _wallet_address := ""
 var _player_loaded := false
+
+var _reward_round_id := ""
+var _reward_balance := 0
+var _reward_progress := 0
+var _reward_symbol := "$Gamer"
+var _reward_state := "ready"
 
 ## Why the bridge is or is not working, shown on screen.
 ##
@@ -89,6 +97,7 @@ var _player_card: PanelContainer
 var _player_label: Label
 var _wallet_status_label: Label
 var _wallet_address_label: Label
+var _reward_label: Label
 var _banner: VBoxContainer
 var _title: Label
 var _subtitle: Label
@@ -160,13 +169,14 @@ func _apply_scale() -> void:
 	_player_card.offset_left = PADDING * u
 	_player_card.offset_right = -PADDING * u
 	_player_card.offset_top = 72.0 * u
-	_player_card.offset_bottom = 174.0 * u
+	_player_card.offset_bottom = 204.0 * u
 
 	_hud.add_theme_font_size_override("font_size", int(26.0 * u))
 	_timer_label.add_theme_font_size_override("font_size", int(26.0 * u))
 	_player_label.add_theme_font_size_override("font_size", int(22.0 * u))
 	_wallet_status_label.add_theme_font_size_override("font_size", int(20.0 * u))
 	_wallet_address_label.add_theme_font_size_override("font_size", int(17.0 * u))
+	_reward_label.add_theme_font_size_override("font_size", int(18.0 * u))
 	_title.add_theme_font_size_override("font_size", int(46.0 * u))
 	_subtitle.add_theme_font_size_override("font_size", int(22.0 * u))
 	_primary.add_theme_font_size_override("font_size", int(26.0 * u))
@@ -269,11 +279,63 @@ func _buzz(style: String) -> void:
 
 
 func _start_round() -> void:
+	if (
+		_sdk != null
+		and _player_loaded
+		and _sdk.startRewardRound != null
+	):
+		_primary.disabled = true
+		_reward_state = "starting"
+		_cb_reward_start = JavaScriptBridge.create_callback(_on_reward_round)
+		_sdk.startRewardRound(_cb_reward_start)
+		_update_hud()
+		return
+
+	_reward_state = "practice"
+	_begin_round()
+
+
+func _on_reward_round(args: Array) -> void:
+	_primary.disabled = false
+	var result = args[0]
+	if result == null or result.error != null:
+		_reward_round_id = ""
+		_reward_state = "unavailable"
+		_begin_round()
+		return
+
+	_reward_round_id = str(result.roundId)
+	_reward_balance = int(result.availableAmount)
+	_reward_symbol = str(result.tokenSymbol)
+	_reward_progress = 0
+	_reward_state = "earning"
+	_cb_reward_tap = JavaScriptBridge.create_callback(_on_reward_tap)
+	_begin_round()
+
+
+func _begin_round() -> void:
 	_score = 0
 	_time_left = ROUND_TIME
 	_playing = true
 	_banner.visible = false
 	_spawn()
+	_update_hud()
+
+
+func _on_reward_tap(args: Array) -> void:
+	var result = args[0]
+	if result == null or result.error != null:
+		_reward_state = "sync failed"
+		_reward_round_id = ""
+		_update_hud()
+		return
+
+	_reward_balance = int(result.availableAmount)
+	_reward_progress = int(result.tapProgress)
+	_reward_symbol = str(result.tokenSymbol)
+	_reward_state = "+%d earned" % int(result.earnedNow) if int(result.earnedNow) > 0 else "earning"
+	if int(result.earnedNow) > 0:
+		_buzz("success")
 	_update_hud()
 
 
@@ -336,6 +398,9 @@ func _gui_input(event: InputEvent) -> void:
 	if point.distance_to(_target_position()) <= _radius + forgiveness:
 		_score += 1
 		_buzz("light")
+		if _reward_round_id != "" and _cb_reward_tap != null:
+			var elapsed_ms := int((ROUND_TIME - _time_left) * 1000.0)
+			_sdk.recordTap(_reward_round_id, _score, elapsed_ms, _cb_reward_tap)
 		_spawn()
 		_update_hud()
 
@@ -407,6 +472,10 @@ func _build_ui() -> void:
 	_wallet_address_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_wallet_address_label.add_theme_color_override("font_color", MUTED)
 	identity.add_child(_wallet_address_label)
+
+	_reward_label = Label.new()
+	_reward_label.add_theme_color_override("font_color", GOLD)
+	identity.add_child(_reward_label)
 
 	_status = Label.new()
 	_status.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
@@ -482,6 +551,19 @@ func _update_hud() -> void:
 			_wallet_status_label.text = "Wallet: Connected"
 			_wallet_status_label.add_theme_color_override("font_color", Color("#5ee6a8"))
 			_wallet_address_label.text = _short_wallet(_wallet_address)
+	if _reward_label:
+		if _reward_state == "practice":
+			_reward_label.text = "Rewards: open from Telegram to earn"
+		elif _reward_state == "unavailable" or _reward_state == "sync failed":
+			_reward_label.text = "Rewards: unavailable this round"
+		elif _reward_state == "starting":
+			_reward_label.text = "Rewards: starting..."
+		else:
+			_reward_label.text = "Rewards: %d %s  •  %d/5 taps" % [
+				_reward_balance,
+				_reward_symbol,
+				_reward_progress,
+			]
 	_timer_label.text = "%0.1fs" % maxf(_time_left, 0.0) if _playing else ""
 	if _status:
 		_status.text = "bridge: %s" % _bridge_state

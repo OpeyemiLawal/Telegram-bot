@@ -223,7 +223,7 @@ async def wallet_balance(
         token_raw, token_decimals = (0, 0)
         if mint:
             token_raw, token_decimals = await solana.get_token_amount(
-                user.wallet_address, mint, rpc_url=settings.solana_rpc_url
+                user.wallet_address, mint, rpc_url=settings.reward_rpc_url
             )
     except solana.SolanaError as exc:
         raise HTTPException(

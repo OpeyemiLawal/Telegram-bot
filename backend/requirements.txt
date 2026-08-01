@@ -13,6 +13,7 @@ alembic==1.16.5
 pyjwt==2.13.0
 pynacl==1.5.0
 httpx==0.28.1
+solana==0.40.1
 python-multipart==0.0.32
 
 # Test-only, but kept here so `pytest -q` works after a single install.

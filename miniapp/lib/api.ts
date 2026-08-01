@@ -272,5 +272,32 @@ export interface WalletBalance {
  */
 export const getWalletBalance = () => request<WalletBalance>("/wallet/balance");
 
+export interface RewardSummary {
+  available_amount: number;
+  pending_amount: number;
+  lifetime_earned: number;
+  lifetime_claimed: number;
+  token_symbol: string;
+  wallet_address: string | null;
+  claims_enabled: boolean;
+  minimum_claim: number;
+  can_claim: boolean;
+}
+
+export interface RewardClaim {
+  claim_id: string;
+  amount: number;
+  token_symbol: string;
+  wallet_address: string;
+  status: "pending" | "submitted" | "confirmed";
+  signature: string | null;
+  explorer_url: string | null;
+  message: string;
+}
+
+export const getRewardSummary = () => request<RewardSummary>("/rewards");
+
+export const claimGamerTokens = () =>
+  request<RewardClaim>("/rewards/claim", { method: "POST" });
 export const unlinkWallet = () =>
   request<void>("/wallet", { method: "DELETE" });

@@ -448,3 +448,169 @@ def test_rate_limit_is_per_client(client):
         json={"init_data": build_init_data(user={"id": 555061})},
     )
     assert quiet.status_code == 200, quiet.text
+
+
+def _reward_headers(game_pair: dict) -> dict[str, str]:
+    return {
+        "Authorization": f"Bearer {game_pair['access_token']}",
+        "Origin": "https://game.test",
+    }
+
+
+def _earn_one_reward(client, telegram_id: int) -> tuple[dict, dict]:
+    import time
+
+    game_pair = game_login(
+        client,
+        user={"id": telegram_id, "first_name": "Reward Player"},
+    ).json()
+    game_headers = _reward_headers(game_pair)
+    started = client.post("/api/game/rewards/rounds", headers=game_headers)
+    assert started.status_code == 200, started.text
+    round_id = started.json()["round_id"]
+
+    last = None
+    for sequence in range(1, 6):
+        time.sleep(0.05)
+        last = client.post(
+            f"/api/game/rewards/rounds/{round_id}/taps",
+            headers=game_headers,
+            json={"sequence": sequence, "elapsed_ms": sequence * 100},
+        )
+        assert last.status_code == 200, last.text
+
+    platform_pair = login(
+        client,
+        user={"id": telegram_id, "first_name": "Reward Player"},
+    ).json()
+    return last.json(), platform_pair
+
+
+def test_five_valid_taps_earn_one_hundred_gamer_tokens(client):
+    last, platform = _earn_one_reward(client, 555010)
+
+    assert last["accepted_taps"] == 5
+    assert last["earned_now"] == 100
+    assert last["available_amount"] == 100
+    assert last["tap_progress"] == 0
+
+    summary = client.get(
+        "/api/rewards",
+        headers={"Authorization": f"Bearer {platform['access_token']}"},
+    )
+    assert summary.status_code == 200, summary.text
+    assert summary.json()["available_amount"] == 100
+    assert summary.json()["lifetime_earned"] == 100
+
+    # A restricted game token cannot call the wallet claim API.
+    game = game_login(
+        client,
+        user={"id": 555010, "first_name": "Reward Player"},
+    ).json()
+    assert (
+        client.get("/api/rewards", headers=_reward_headers(game)).status_code
+        == 401
+    )
+
+
+def test_reward_round_rejects_duplicate_tap_numbers(client):
+    import time
+
+    game = game_login(
+        client,
+        user={"id": 555011, "first_name": "Sequence Player"},
+    ).json()
+    headers = _reward_headers(game)
+    round_id = client.post("/api/game/rewards/rounds", headers=headers).json()["round_id"]
+
+    time.sleep(0.05)
+    first = client.post(
+        f"/api/game/rewards/rounds/{round_id}/taps",
+        headers=headers,
+        json={"sequence": 1, "elapsed_ms": 100},
+    )
+    assert first.status_code == 200
+
+    duplicate = client.post(
+        f"/api/game/rewards/rounds/{round_id}/taps",
+        headers=headers,
+        json={"sequence": 1, "elapsed_ms": 200},
+    )
+    assert duplicate.status_code == 409
+
+
+def test_claim_is_disabled_until_treasury_is_configured(client):
+    _, platform = _earn_one_reward(client, 555012)
+    response = client.post(
+        "/api/rewards/claim",
+        headers={"Authorization": f"Bearer {platform['access_token']}"},
+    )
+    # Wallet is checked before treasury configuration.
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Connect a wallet before claiming."
+
+
+def test_claim_debits_once_and_sends_to_linked_wallet(client, monkeypatch):
+    import asyncio
+
+    from sqlalchemy import select
+
+    from app.config import get_settings
+    from app.models import User
+
+    telegram_id = 555013
+    _, platform = _earn_one_reward(client, telegram_id)
+    wallet = "11111111111111111111111111111111"
+
+    async def link_wallet():
+        async with SessionMaker() as session:
+            user = await session.scalar(
+                select(User).where(User.telegram_id == telegram_id)
+            )
+            assert user is not None
+            user.wallet_address = wallet
+            await session.commit()
+
+    asyncio.run(link_wallet())
+
+    sent: list[dict] = []
+
+    async def fake_send(**kwargs):
+        sent.append(kwargs)
+        return "test-confirmed-signature"
+
+    monkeypatch.setattr("app.api.rewards.send_gamer_tokens", fake_send)
+
+    settings = get_settings()
+    old = (
+        settings.rewards_claims_enabled,
+        settings.gamer_token_mint,
+        settings.gamer_treasury_keypair,
+    )
+    settings.rewards_claims_enabled = True
+    settings.gamer_token_mint = "11111111111111111111111111111111"
+    settings.gamer_treasury_keypair = "test-only"
+    try:
+        headers = {"Authorization": f"Bearer {platform['access_token']}"}
+        claimed = client.post("/api/rewards/claim", headers=headers)
+        assert claimed.status_code == 200, claimed.text
+        assert claimed.json()["amount"] == 100
+        assert claimed.json()["status"] == "confirmed"
+        assert claimed.json()["wallet_address"] == wallet
+        assert len(sent) == 1
+        assert sent[0]["whole_tokens"] == 100
+        assert sent[0]["destination_wallet"] == wallet
+
+        second = client.post("/api/rewards/claim", headers=headers)
+        assert second.status_code == 409
+        assert len(sent) == 1
+
+        summary = client.get("/api/rewards", headers=headers).json()
+        assert summary["available_amount"] == 0
+        assert summary["lifetime_claimed"] == 100
+    finally:
+        (
+            settings.rewards_claims_enabled,
+            settings.gamer_token_mint,
+            settings.gamer_treasury_keypair,
+        ) = old
