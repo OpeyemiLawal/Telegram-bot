@@ -42,7 +42,6 @@ def main_menu(
                 web_app=_url("/wallet"),
             )
         ],
-        [InlineKeyboardButton(text="Games", web_app=_url("/games"))],
         [
             InlineKeyboardButton(
                 text="How it works",
