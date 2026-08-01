@@ -269,6 +269,34 @@
       tokenSymbol: body.token_symbol,
     };
   }
+
+  function rewardSummaryResult(body) {
+    return {
+      availableAmount: body.available_amount,
+      pendingAmount: body.pending_amount,
+      lifetimeEarned: body.lifetime_earned,
+      lifetimeClaimed: body.lifetime_claimed,
+      tokenSymbol: body.token_symbol,
+      walletAddress: body.wallet_address || null,
+      claimsEnabled: Boolean(body.claims_enabled),
+      minimumClaim: body.minimum_claim,
+      canClaim: Boolean(body.can_claim),
+    };
+  }
+
+  function claimResult(body) {
+    return {
+      claimId: body.claim_id,
+      amount: body.amount,
+      tokenSymbol: body.token_symbol,
+      walletAddress: body.wallet_address,
+      status: body.status,
+      signature: body.signature || null,
+      explorerUrl: body.explorer_url || null,
+      message: body.message,
+    };
+  }
+
   function telegramSurface() {
     var platform = telegram && telegram.platform ? telegram.platform : "unknown";
     if (platform === "android" || platform === "ios") return "mobile";
@@ -368,6 +396,37 @@
         });
       finishDirect(rewardQueue, done);
     },
+
+    getRewardSummary: function (callback) {
+      var done = wrap(callback);
+      if (!done) return;
+      if (!directMode) {
+        done({ ok: false, error: "Rewards require a direct Telegram launch." });
+        return;
+      }
+      finishDirect(
+        directAuthorizedRequest("/rewards", { method: "GET" }).then(
+          rewardSummaryResult,
+        ),
+        done,
+      );
+    },
+
+    claimRewards: function (callback) {
+      var done = wrap(callback);
+      if (!done) return;
+      if (!directMode) {
+        done({ ok: false, error: "Claims require a direct Telegram launch." });
+        return;
+      }
+      finishDirect(
+        directAuthorizedRequest("/rewards/claim", { method: "POST" }).then(
+          claimResult,
+        ),
+        done,
+      );
+    },
+
     haptic: function (style) {
       if (directMode) {
         directHaptic(style || "light");

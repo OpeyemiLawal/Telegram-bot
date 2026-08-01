@@ -11,6 +11,12 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.game_sessions import GameSession, current_game_session
+from app.api.rewards import (
+    ClaimOut,
+    RewardSummaryOut,
+    claim_for_user,
+    reward_summary_for_user,
+)
 from app.config import Settings, get_settings
 from app.db import get_session
 from app.models import GameRewardRound, RewardAccount, User
@@ -52,6 +58,26 @@ class TapOut(BaseModel):
     available_amount: int
     daily_remaining: int
     token_symbol: str
+
+
+@router.get("", response_model=RewardSummaryOut)
+async def game_reward_summary(
+    active: GameSession = Depends(current_game_session),
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> RewardSummaryOut:
+    """Expose only reward state needed by the registered game origin."""
+    return await reward_summary_for_user(active.user, session, settings)
+
+
+@router.post("/claim", response_model=ClaimOut)
+async def claim_game_rewards(
+    active: GameSession = Depends(current_game_session),
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> ClaimOut:
+    """Pay earned rewards only to the wallet already linked to this player."""
+    return await claim_for_user(active.user, session, settings)
 
 
 def _as_utc(value: datetime) -> datetime:

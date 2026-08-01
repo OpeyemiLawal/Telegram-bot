@@ -175,6 +175,7 @@ class BalanceOut(BaseModel):
     # kind of thing two clients round differently.
     sol: str
     sol_display: str
+    sol_available: bool
 
     token_symbol: str
     token_amount: str
@@ -183,6 +184,7 @@ class BalanceOut(BaseModel):
     # that case, and the client can say why rather than implying the player holds
     # nothing.
     token_configured: bool
+    token_available: bool
 
 
 @router.get("/balance", response_model=BalanceOut)
@@ -209,37 +211,44 @@ async def wallet_balance(
             lamports=0,
             sol="0",
             sol_display="0.000",
+            sol_available=True,
             token_symbol=symbol,
             token_amount="0",
             token_display="0",
             token_configured=bool(mint),
+            token_available=True,
         )
 
+    lamports = 0
+    sol_available = True
     try:
         lamports = await solana.get_lamports(
             user.wallet_address, rpc_url=settings.solana_rpc_url
         )
+    except solana.SolanaError:
+        sol_available = False
 
-        token_raw, token_decimals = (0, 0)
-        if mint:
+    token_raw, token_decimals = (0, 0)
+    token_available = True
+    if mint:
+        try:
             token_raw, token_decimals = await solana.get_token_amount(
                 user.wallet_address, mint, rpc_url=settings.reward_rpc_url
             )
-    except solana.SolanaError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Could not read your balance right now. Try again shortly.",
-        ) from exc
+        except solana.SolanaError:
+            token_available = False
 
     return BalanceOut(
         address=user.wallet_address,
         lamports=lamports,
         sol=solana.to_sol(lamports),
         sol_display=solana.to_sol(lamports, places=3),
+        sol_available=sol_available,
         token_symbol=symbol,
         token_amount=solana.format_units(token_raw, token_decimals),
         token_display=solana.format_units(token_raw, token_decimals, places=0),
         token_configured=bool(mint),
+        token_available=token_available,
     )
 
 

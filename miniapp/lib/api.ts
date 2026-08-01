@@ -256,11 +256,13 @@ export interface WalletBalance {
   sol: string;
   /** What the player card shows: three decimals, truncated not rounded. */
   sol_display: string;
+  sol_available: boolean;
   token_symbol: string;
   token_amount: string;
   token_display: string;
   /** False until the token mint is configured. A truthful zero, not an error. */
   token_configured: boolean;
+  token_available: boolean;
 }
 
 /**

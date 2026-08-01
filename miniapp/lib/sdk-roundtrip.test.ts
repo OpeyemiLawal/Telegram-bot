@@ -173,6 +173,29 @@ function loadDirectSdk() {
           daily_remaining: 9900,
           token_symbol: "$Gamer",
         };
+      } else if (url.endsWith("/rewards/claim")) {
+        body = {
+          claim_id: "claim-1",
+          amount: 100,
+          token_symbol: "$Gamer",
+          wallet_address: "WalletPublicAddress",
+          status: "confirmed",
+          signature: "signature-1",
+          explorer_url: "https://explorer.solana.com/tx/signature-1?cluster=devnet",
+          message: "Gamer Tokens were sent to your linked wallet.",
+        };
+      } else if (url.endsWith("/rewards")) {
+        body = {
+          available_amount: 100,
+          pending_amount: 0,
+          lifetime_earned: 100,
+          lifetime_claimed: 0,
+          token_symbol: "$Gamer",
+          wallet_address: "WalletPublicAddress",
+          claims_enabled: true,
+          minimum_claim: 100,
+          can_claim: true,
+        };
       }
       return {
         ok: true,
@@ -275,6 +298,45 @@ describe("SDK direct Telegram mode", () => {
       "game-token-never-exposed",
     );
   });
+  it("loads claim state and claims only through the authenticated game API", async () => {
+    const direct = loadDirectSdk();
+    const summaries: any[] = [];
+    const claims: any[] = [];
+
+    direct.sdk.getRewardSummary((value: any) => summaries.push(value));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    direct.sdk.claimRewards((value: any) => claims.push(value));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(summaries[0].availableAmount).toBe(100);
+    expect(summaries[0].canClaim).toBe(true);
+    expect(claims[0]).toMatchObject({
+      amount: 100,
+      walletAddress: "WalletPublicAddress",
+      status: "confirmed",
+      signature: "signature-1",
+    });
+
+    const rewardCalls = direct.calls.slice(1);
+    expect(rewardCalls.map((call) => call.url)).toEqual([
+      "https://api.test/api/game/rewards",
+      "https://api.test/api/game/rewards/claim",
+    ]);
+    expect(
+      rewardCalls.every(
+        (call) =>
+          (call.init.headers as any).Authorization ===
+          "Bearer game-token-never-exposed",
+      ),
+    ).toBe(true);
+    expect(JSON.stringify(summaries) + JSON.stringify(claims)).not.toContain(
+      "game-token-never-exposed",
+    );
+  });
+
   it("uses Telegram haptics and closes the direct game", () => {
     const direct = loadDirectSdk();
 

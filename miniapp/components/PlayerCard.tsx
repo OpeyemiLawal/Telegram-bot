@@ -27,8 +27,10 @@ export function PlayerCard({ user }: { user: Me }) {
     void load();
   }, [load]);
 
-  const sol = !connected ? "—" : failed ? "—" : (balance?.sol_display ?? "…");
-  const token = !connected ? "—" : failed ? "—" : (balance?.token_display ?? "…");
+  const solFailed = failed || balance?.sol_available === false;
+  const tokenFailed = failed || balance?.token_available === false;
+  const sol = !connected ? "—" : solFailed ? "—" : (balance?.sol_display ?? "…");
+  const token = !connected ? "—" : tokenFailed ? "—" : (balance?.token_display ?? "…");
   const symbol = balance?.token_symbol ?? "$Gamer";
   const name = user.display_name || "Player";
 
@@ -53,18 +55,28 @@ export function PlayerCard({ user }: { user: Me }) {
 
         <div className="card__balances">
           <div>
-            <span className={connected && !failed ? "card__amount" : "card__amount card__amount--idle"}>
+            <span className={connected && !solFailed ? "card__amount" : "card__amount card__amount--idle"}>
               {sol}
             </span>
             <span className="card__denom">SOL</span>
           </div>
           <div>
-            <span className={connected && !failed ? "card__amount" : "card__amount card__amount--idle"}>
+            <span className={connected && !tokenFailed ? "card__amount" : "card__amount card__amount--idle"}>
               {token}
             </span>
             <span className="card__denom">{symbol}</span>
           </div>
         </div>
+
+        {connected && (solFailed || tokenFailed) && (
+          <button
+            className="button button--quiet"
+            style={{ marginTop: 12 }}
+            onClick={() => void load()}
+          >
+            Retry balances
+          </button>
+        )}
       </div>
     </section>
   );

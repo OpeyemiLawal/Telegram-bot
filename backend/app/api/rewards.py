@@ -87,11 +87,10 @@ def _claim_out(claim: RewardClaim, settings: Settings) -> ClaimOut:
     )
 
 
-@router.get("", response_model=RewardSummaryOut)
-async def reward_summary(
-    user: User = Depends(current_user),
-    session: AsyncSession = Depends(get_session),
-    settings: Settings = Depends(get_settings),
+async def reward_summary_for_user(
+    user: User,
+    session: AsyncSession,
+    settings: Settings,
 ) -> RewardSummaryOut:
     account = await session.get(RewardAccount, user.id)
     available = account.available_amount if account else 0
@@ -116,11 +115,10 @@ async def reward_summary(
     )
 
 
-@router.post("/claim", response_model=ClaimOut)
-async def claim_rewards(
-    user: User = Depends(current_user),
-    session: AsyncSession = Depends(get_session),
-    settings: Settings = Depends(get_settings),
+async def claim_for_user(
+    user: User,
+    session: AsyncSession,
+    settings: Settings,
 ) -> ClaimOut:
     """Debit once, then send once from the dedicated reward treasury."""
     if not user.wallet_address:
@@ -191,3 +189,21 @@ async def claim_rewards(
     claim.last_error = None
     await session.commit()
     return _claim_out(claim, settings)
+
+
+@router.get("", response_model=RewardSummaryOut)
+async def reward_summary(
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> RewardSummaryOut:
+    return await reward_summary_for_user(user, session, settings)
+
+
+@router.post("/claim", response_model=ClaimOut)
+async def claim_rewards(
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> ClaimOut:
+    return await claim_for_user(user, session, settings)

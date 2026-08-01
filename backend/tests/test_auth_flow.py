@@ -614,3 +614,125 @@ def test_claim_debits_once_and_sends_to_linked_wallet(client, monkeypatch):
             settings.gamer_token_mint,
             settings.gamer_treasury_keypair,
         ) = old
+
+def test_game_can_claim_only_to_its_linked_wallet(client, monkeypatch):
+    import asyncio
+
+    from sqlalchemy import select
+
+    from app.config import get_settings
+    from app.models import User
+
+    telegram_id = 555014
+    _earn_one_reward(client, telegram_id)
+    game = game_login(
+        client,
+        user={"id": telegram_id, "first_name": "In Game Claim"},
+    ).json()
+    headers = _reward_headers(game)
+    wallet = "11111111111111111111111111111111"
+
+    async def link_wallet():
+        async with SessionMaker() as session:
+            user = await session.scalar(
+                select(User).where(User.telegram_id == telegram_id)
+            )
+            assert user is not None
+            user.wallet_address = wallet
+            await session.commit()
+
+    asyncio.run(link_wallet())
+
+    sent: list[dict] = []
+
+    async def fake_send(**kwargs):
+        sent.append(kwargs)
+        return "game-confirmed-signature"
+
+    monkeypatch.setattr("app.api.rewards.send_gamer_tokens", fake_send)
+
+    settings = get_settings()
+    old = (
+        settings.rewards_claims_enabled,
+        settings.gamer_token_mint,
+        settings.gamer_treasury_keypair,
+    )
+    settings.rewards_claims_enabled = True
+    settings.gamer_token_mint = "11111111111111111111111111111111"
+    settings.gamer_treasury_keypair = "test-only"
+    try:
+        summary = client.get("/api/game/rewards", headers=headers)
+        assert summary.status_code == 200, summary.text
+        assert summary.json()["available_amount"] == 100
+        assert summary.json()["can_claim"] is True
+
+        bad_origin = client.post(
+            "/api/game/rewards/claim",
+            headers={**headers, "Origin": "https://evil.test"},
+        )
+        assert bad_origin.status_code == 403
+        assert sent == []
+
+        claimed = client.post("/api/game/rewards/claim", headers=headers)
+        assert claimed.status_code == 200, claimed.text
+        assert claimed.json()["wallet_address"] == wallet
+        assert claimed.json()["status"] == "confirmed"
+        assert len(sent) == 1
+        assert sent[0]["destination_wallet"] == wallet
+    finally:
+        (
+            settings.rewards_claims_enabled,
+            settings.gamer_token_mint,
+            settings.gamer_treasury_keypair,
+        ) = old
+
+
+def test_wallet_balance_keeps_token_visible_when_sol_rpc_fails(client, monkeypatch):
+    import asyncio
+
+    from sqlalchemy import select
+
+    from app.config import get_settings
+    from app.models import User
+    from app.solana import SolanaError
+
+    telegram_id = 555015
+    platform = login(
+        client,
+        user={"id": telegram_id, "first_name": "Balance Player"},
+    ).json()
+    wallet = "11111111111111111111111111111111"
+
+    async def link_wallet():
+        async with SessionMaker() as session:
+            user = await session.scalar(
+                select(User).where(User.telegram_id == telegram_id)
+            )
+            assert user is not None
+            user.wallet_address = wallet
+            await session.commit()
+
+    async def failed_sol(*args, **kwargs):
+        raise SolanaError("mainnet unavailable")
+
+    async def token_balance(*args, **kwargs):
+        return 2500, 2
+
+    asyncio.run(link_wallet())
+    monkeypatch.setattr("app.api.wallet.solana.get_lamports", failed_sol)
+    monkeypatch.setattr("app.api.wallet.solana.get_token_amount", token_balance)
+
+    settings = get_settings()
+    old_mint = settings.gamer_token_mint
+    settings.gamer_token_mint = "11111111111111111111111111111111"
+    try:
+        response = client.get(
+            "/api/wallet/balance",
+            headers={"Authorization": f"Bearer {platform['access_token']}"},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["sol_available"] is False
+        assert response.json()["token_available"] is True
+        assert response.json()["token_display"] == "25"
+    finally:
+        settings.gamer_token_mint = old_mint

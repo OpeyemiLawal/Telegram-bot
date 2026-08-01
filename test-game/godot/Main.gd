@@ -1,6 +1,6 @@
 extends Control
 
-## Tap Rush — a small, real game that drives the bridge.
+## Tap Rush â€” a small, real game that drives the bridge.
 ##
 ## Deliberately a game rather than a diagnostic screen. A row of buttons proves
 ## the messages work in isolation; it does not prove they work while a frame is
@@ -12,7 +12,7 @@ extends Control
 ##
 ##   handshake   once on ready, before anything is drawn
 ##   getPlayer   the name shown in the HUD comes from the shell, not from Godot
-##   haptic      on every hit, so ~50 calls a round — a rate a real game reaches
+##   haptic      on every hit, so ~50 calls a round â€” a rate a real game reaches
 ##   exit        the shell navigates, the game does not
 ##
 ## Notice the callbacks are stored in member variables. A JavaScriptBridge
@@ -26,12 +26,12 @@ extends Control
 ## ---------------------------------------------------------------------------
 ##
 ## Nothing below is a fixed pixel value. The shell sizes its iframe from the
-## player's viewport, and Telegram's is different on every device — a tall phone,
+## player's viewport, and Telegram's is different on every device â€” a tall phone,
 ## a squat desktop window, a tablet in landscape. Sizes are expressed against a
 ## 720x1280 reference and scaled by how much of that reference actually fits, so
 ## the target is always thumb-sized relative to the screen rather than absolutely.
 ##
-## The alternative — designing for one size and letting the engine letterbox —
+## The alternative â€” designing for one size and letting the engine letterbox â€”
 ## looks correct in the editor and wrong on hardware.
 
 const REFERENCE := Vector2(720.0, 1280.0)
@@ -43,7 +43,7 @@ const START_RADIUS := 120.0
 const MIN_RADIUS := 30.0
 const SHRINK_PER_SECOND := 55.0
 const PADDING := 24.0
-const TOP_BAR := 190.0
+const TOP_BAR := 285.0
 
 const GOLD := Color("#c89b3c")
 const BG := Color("#0b1620")
@@ -55,6 +55,8 @@ var _cb_handshake: JavaScriptObject
 var _cb_player: JavaScriptObject
 var _cb_reward_start: JavaScriptObject
 var _cb_reward_tap: JavaScriptObject
+var _cb_reward_summary: JavaScriptObject
+var _cb_reward_claim: JavaScriptObject
 
 var _playing := false
 var _score := 0
@@ -76,6 +78,10 @@ var _reward_balance := 0
 var _reward_progress := 0
 var _reward_symbol := "$Gamer"
 var _reward_state := "ready"
+var _claims_enabled := false
+var _minimum_claim := 100
+var _claim_working := false
+var _claim_state := "loading"
 
 ## Why the bridge is or is not working, shown on screen.
 ##
@@ -98,6 +104,7 @@ var _player_label: Label
 var _wallet_status_label: Label
 var _wallet_address_label: Label
 var _reward_label: Label
+var _claim_button: Button
 var _banner: VBoxContainer
 var _title: Label
 var _subtitle: Label
@@ -122,7 +129,7 @@ func _ready() -> void:
 
 ## How much of the reference layout fits on this screen.
 ##
-## The smaller of the two ratios, so the design fits in both directions — taking
+## The smaller of the two ratios, so the design fits in both directions â€” taking
 ## the larger would size the target off the bottom of a short window. Clamped
 ## because a very large screen should not produce a circle the size of a dinner
 ## plate, and a very small one should stay tappable.
@@ -169,7 +176,7 @@ func _apply_scale() -> void:
 	_player_card.offset_left = PADDING * u
 	_player_card.offset_right = -PADDING * u
 	_player_card.offset_top = 72.0 * u
-	_player_card.offset_bottom = 204.0 * u
+	_player_card.offset_bottom = 282.0 * u
 
 	_hud.add_theme_font_size_override("font_size", int(26.0 * u))
 	_timer_label.add_theme_font_size_override("font_size", int(26.0 * u))
@@ -177,6 +184,7 @@ func _apply_scale() -> void:
 	_wallet_status_label.add_theme_font_size_override("font_size", int(20.0 * u))
 	_wallet_address_label.add_theme_font_size_override("font_size", int(17.0 * u))
 	_reward_label.add_theme_font_size_override("font_size", int(18.0 * u))
+	_claim_button.add_theme_font_size_override("font_size", int(18.0 * u))
 	_title.add_theme_font_size_override("font_size", int(46.0 * u))
 	_subtitle.add_theme_font_size_override("font_size", int(22.0 * u))
 	_primary.add_theme_font_size_override("font_size", int(26.0 * u))
@@ -194,7 +202,7 @@ func _apply_scale() -> void:
 	_primary.custom_minimum_size = Vector2(0.0, 72.0 * u)
 	_leave_button.custom_minimum_size = Vector2(0.0, 60.0 * u)
 
-	# A resize can leave the current radius outside the new bounds — larger than
+	# A resize can leave the current radius outside the new bounds â€” larger than
 	# a shrunken screen allows, or already below the new miss threshold.
 	_radius = clampf(_radius, _min_radius(), _start_radius())
 
@@ -238,7 +246,7 @@ func _on_handshake(args: Array) -> void:
 	# A JavaScriptObject resolves unknown properties to null via `_get`, so
 	# `info.error` is the supported way to ask. `info.get("error")` routes through
 	# Godot's own Object.get, which is not the same lookup and pushes an error for
-	# a property Godot does not know about — enough to abort this handler before
+	# a property Godot does not know about â€” enough to abort this handler before
 	# it ever requests the player, leaving the HUD reading "player" with nothing
 	# logged to say why.
 	if info == null or info.error != null:
@@ -267,6 +275,7 @@ func _on_player(args: Array) -> void:
 	_wallet_address = "" if player.walletAddress == null else str(player.walletAddress)
 	_player_loaded = true
 	_bridge_state = "ok"
+	_refresh_rewards()
 	_update_hud()
 
 
@@ -274,6 +283,76 @@ func _buzz(style: String) -> void:
 	if _sdk != null:
 		_sdk.haptic(style)
 
+
+func _refresh_rewards() -> void:
+	if (
+		_sdk == null
+		or not _player_loaded
+		or _sdk.getRewardSummary == null
+	):
+		_claim_state = "unavailable"
+		_update_hud()
+		return
+
+	_claim_state = "loading"
+	_cb_reward_summary = JavaScriptBridge.create_callback(_on_reward_summary)
+	_sdk.getRewardSummary(_cb_reward_summary)
+	_update_hud()
+
+
+func _on_reward_summary(args: Array) -> void:
+	var result = args[0]
+	if result == null or result.error != null:
+		_claim_state = "unavailable"
+		_update_hud()
+		return
+
+	_reward_balance = int(result.availableAmount)
+	_reward_symbol = str(result.tokenSymbol)
+	_claims_enabled = bool(result.claimsEnabled)
+	_minimum_claim = int(result.minimumClaim)
+	_claim_state = "ready"
+	_update_hud()
+
+
+func _on_claim_button() -> void:
+	if _claim_state == "unavailable":
+		_refresh_rewards()
+		return
+	_claim_rewards()
+
+
+func _claim_rewards() -> void:
+	if (
+		_sdk == null
+		or _claim_working
+		or not _claims_enabled
+		or _reward_balance < _minimum_claim
+		or _wallet_address.is_empty()
+	):
+		return
+
+	_claim_working = true
+	_claim_state = "sending"
+	_cb_reward_claim = JavaScriptBridge.create_callback(_on_reward_claim)
+	_sdk.claimRewards(_cb_reward_claim)
+	_update_hud()
+
+
+func _on_reward_claim(args: Array) -> void:
+	_claim_working = false
+	var result = args[0]
+	if result == null or result.error != null:
+		_claim_state = "failed"
+		_buzz("error")
+		_update_hud()
+		return
+
+	_reward_balance = 0
+	_reward_progress = 0
+	_claim_state = "claimed"
+	_buzz("success")
+	_update_hud()
 
 # --- game ---------------------------------------------------------------------
 
@@ -373,8 +452,8 @@ func _end_round(reason: String) -> void:
 	_buzz("error")
 	queue_redraw()
 	_show_banner(
-		"%s — %d" % [reason, _score],
-		"Best %d · %s" % [_best, _player_name],
+		"%s â€” %d" % [reason, _score],
+		"Best %d Â· %s" % [_best, _player_name],
 		"Play again",
 	)
 
@@ -412,7 +491,7 @@ func _draw() -> void:
 		return
 
 	var centre := _target_position()
-	# A faint ring at full size makes the shrink readable — without it the target
+	# A faint ring at full size makes the shrink readable â€” without it the target
 	# just looks small rather than running out of time.
 	draw_arc(centre, _start_radius(), 0.0, TAU, 48, Color(GOLD, 0.15), 2.0 * _unit())
 	draw_circle(centre, _radius, GOLD)
@@ -444,7 +523,7 @@ func _build_ui() -> void:
 
 	_player_card = PanelContainer.new()
 	_player_card.anchor_right = 1.0
-	_player_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_player_card.mouse_filter = Control.MOUSE_FILTER_PASS
 	var card_style := StyleBoxFlat.new()
 	card_style.bg_color = Color("#132431")
 	card_style.border_color = Color("#294252")
@@ -476,6 +555,11 @@ func _build_ui() -> void:
 	_reward_label = Label.new()
 	_reward_label.add_theme_color_override("font_color", GOLD)
 	identity.add_child(_reward_label)
+
+	_claim_button = Button.new()
+	_claim_button.text = "Loading rewards..."
+	_claim_button.pressed.connect(_on_claim_button)
+	identity.add_child(_claim_button)
 
 	_status = Label.new()
 	_status.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
@@ -559,17 +643,45 @@ func _update_hud() -> void:
 		elif _reward_state == "starting":
 			_reward_label.text = "Rewards: starting..."
 		else:
-			_reward_label.text = "Rewards: %d %s  •  %d/5 taps" % [
+			_reward_label.text = "Rewards: %d %s  â€¢  %d/5 taps" % [
 				_reward_balance,
 				_reward_symbol,
 				_reward_progress,
 			]
 	_timer_label.text = "%0.1fs" % maxf(_time_left, 0.0) if _playing else ""
+	_update_claim_button()
 	if _status:
 		_status.text = "bridge: %s" % _bridge_state
 	if _subtitle:
 		_refresh_subtitle()
 
+
+func _update_claim_button() -> void:
+	if _claim_button == null:
+		return
+
+	_claim_button.disabled = true
+	if not _player_loaded:
+		_claim_button.text = "Loading rewards..."
+	elif _wallet_address.is_empty():
+		_claim_button.text = "Connect wallet to claim"
+	elif _claim_state == "loading":
+		_claim_button.text = "Loading rewards..."
+	elif _claim_state == "unavailable":
+		_claim_button.text = "Retry reward balance"
+		_claim_button.disabled = false
+	elif _claim_state == "sending":
+		_claim_button.text = "Sending to wallet..."
+	elif _claim_state == "failed":
+		_claim_button.text = "Claim failed - tap to retry"
+		_claim_button.disabled = false
+	elif not _claims_enabled:
+		_claim_button.text = "Claims not enabled"
+	elif _reward_balance < _minimum_claim:
+		_claim_button.text = "Earn %d more to claim" % (_minimum_claim - _reward_balance)
+	else:
+		_claim_button.text = "Claim %d %s to wallet" % [_reward_balance, _reward_symbol]
+		_claim_button.disabled = _playing
 
 func _short_wallet(address: String) -> String:
 	if address.length() <= 16:
@@ -582,5 +694,5 @@ func _leave() -> void:
 		_sdk.exit()
 	else:
 		# Outside the shell there is nowhere to go, so say so rather than doing
-		# nothing — a dead button in a test build wastes an export cycle.
+		# nothing â€” a dead button in a test build wastes an export cycle.
 		_show_banner("Not in the shell", "Exit only works inside Telegram.", "Start")
