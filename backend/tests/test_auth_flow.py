@@ -24,7 +24,7 @@ os.environ.setdefault("WEBHOOK_SECRET", secrets.token_urlsafe(32))
 os.environ.setdefault("JWT_SECRET", secrets.token_urlsafe(32))
 os.environ.setdefault("PUBLIC_API_URL", "https://api.test")
 os.environ.setdefault("MINIAPP_URL", "https://play.test")
-os.environ.setdefault("ALLOWED_ORIGINS", "https://play.test")
+os.environ.setdefault("ALLOWED_ORIGINS", "https://play.test,https://game.test")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./test_sga.db")
 
 from fastapi.testclient import TestClient  # noqa: E402
@@ -170,6 +170,116 @@ def test_games_requires_auth(client):
     )
     assert res.status_code == 200
     assert len(res.json()) >= 1
+
+
+def game_login(client, *, origin="https://game.test", **kwargs):
+    return client.post(
+        "/api/game/auth",
+        headers={"Origin": origin},
+        json={
+            "game_slug": "test-game",
+            "init_data": build_init_data(token=BOT_TOKEN, **kwargs),
+        },
+    )
+
+
+def test_direct_game_gets_only_a_scoped_session(client):
+    logged_in = game_login(
+        client,
+        user={"id": 555007, "first_name": "Katherine"},
+    )
+    assert logged_in.status_code == 200, logged_in.text
+
+    body = logged_in.json()
+    assert body["game_slug"] == "test-game"
+    assert body["player"]["display_name"] == "Katherine"
+    assert body["player"]["wallet_address"] is None
+    assert body["access_token"]
+    assert "refresh_token" not in body
+
+    headers = {
+        "Authorization": f"Bearer {body['access_token']}",
+        "Origin": "https://game.test",
+    }
+    session = client.get("/api/game/session", headers=headers)
+    assert session.status_code == 200, session.text
+    assert session.json()["game_slug"] == "test-game"
+
+    # A game token cannot call full-platform endpoints.
+    assert client.get("/api/auth/me", headers=headers).status_code == 401
+
+    # A full-platform token cannot be used as a game token either.
+    platform = login(
+        client,
+        user={"id": 555007, "first_name": "Katherine"},
+    ).json()
+    wrong_scope = client.get(
+        "/api/game/session",
+        headers={
+            "Authorization": f"Bearer {platform['access_token']}",
+            "Origin": "https://game.test",
+        },
+    )
+    assert wrong_scope.status_code == 401
+
+
+def test_direct_game_rejects_an_unregistered_origin(client):
+    rejected = game_login(
+        client,
+        origin="https://attacker.example",
+        user={"id": 555008, "first_name": "Margaret"},
+    )
+    assert rejected.status_code == 403
+
+
+def test_direct_game_receives_the_already_linked_wallet(client):
+    import asyncio
+
+    telegram_id = 555009
+    game_login(
+        client,
+        user={"id": telegram_id, "first_name": "Dorothy"},
+    )
+
+    async def link_public_address():
+        from sqlalchemy import select
+
+        from app.models import User
+
+        async with SessionMaker() as session:
+            user = await session.scalar(
+                select(User).where(User.telegram_id == telegram_id)
+            )
+            assert user is not None
+            user.wallet_address = "11111111111111111111111111111111"
+            await session.commit()
+
+    asyncio.run(link_public_address())
+
+    reopened = game_login(
+        client,
+        user={"id": telegram_id, "first_name": "Dorothy"},
+    )
+    assert reopened.status_code == 200, reopened.text
+    assert (
+        reopened.json()["player"]["wallet_address"]
+        == "11111111111111111111111111111111"
+    )
+
+
+
+def test_bot_game_button_uses_the_registered_vercel_origin(client):
+    import asyncio
+
+    from app.bot.handlers import _games_keyboard
+
+    markup = asyncio.run(_games_keyboard())
+    first = markup.inline_keyboard[0][0]
+
+    assert first.text == "🎮 Test Game"
+    assert first.web_app is not None
+    assert first.web_app.url == "https://game.test"
+    assert "/play/" not in first.web_app.url
 
 _BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 

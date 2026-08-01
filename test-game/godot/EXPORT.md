@@ -1,96 +1,48 @@
-# Exporting a game
+# Export Tap Rush for Telegram
 
-The project lives here. The export goes somewhere else — mixing built output into
-a source folder is easy to do and tedious to undo.
+Current flow:
 
-```
-test-game/godot/          the project (open this in Godot)
-test-game/godot-export/   the export (generated, deployed)
-```
+    Main bot -> Test -> Tap Rush Vercel app
 
----
+The game opens directly as a Telegram Mini App. There is no iframe and no separate bot.
 
-## One-time setup per project
+## One-time Godot Web settings
 
-Two settings. Do these once and every future export is bridge-ready with no
-editing afterwards.
+1. Open Project -> Export -> Web.
+2. Disable Thread Support.
+3. Set Head Include to:
 
-**Project → Export → Web**
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+    window.SGA_CONFIG = {
+      apiUrl: "https://sga-api-v924.onrender.com",
+      gameSlug: "tap-rush"
+    };
+    </script>
+    <script src="https://sga-miniapp.vercel.app/sdk/v1/sga-sdk.js"></script>
 
-**1. Uncheck "Thread Support".**
+These settings are already saved in export_presets.cfg for Tap Rush.
 
-Not a preference. A threaded export only runs when the page is served with
-`Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy`, and cross-origin
-isolation breaks the wallet provider's iframes and third-party RPC calls. Leave
-it on and you fix the game while breaking the wallet, with no error connecting
-the two.
+## Export and deploy
 
-**2. Set "Head Include" to this single line:**
+1. Export as test-game/godot-export/index.html.
+2. In the Tap Rush Vercel project, set Root Directory to test-game/godot-export.
+3. Deploy.
+4. In Render, set ALLOWED_ORIGINS to:
 
-```html
-<script src="https://sga-miniapp.vercel.app/sdk/v1/sga-sdk.js"></script>
-```
+    https://sga-miniapp.vercel.app,https://sga-test-game.vercel.app
 
-Find it under the **HTML** section of the Web preset.
+5. In the game catalogue, keep tap-rush live with this exact URL:
 
-Godot injects that into `<head>` of every export it generates. The engine script
-sits at the end of `<body>`, so the SDK is always loaded first — which is the
-ordering `JavaScriptBridge.get_interface("SGA")` depends on during `_ready()`.
+    https://sga-test-game.vercel.app
 
-This replaces the old routine of copying `sga-sdk.js` into the export folder and
-hand-editing `index.html` after every single export. That step was forgotten
-constantly, and it fails silently: the game runs perfectly and simply never
-learns the player's name.
+A different URL, protocol, port, or Vercel preview domain is rejected by the backend.
 
-Both settings are stored in `export_presets.cfg`, so they survive reopening the
-project — but that file is per-project. A new game needs both set again.
+## What the game receives
 
----
+The SDK verifies Telegram through the SGA backend. Godot receives only:
 
-## Why the SDK loads from a URL
+- displayName
+- walletAddress, or null when no wallet is linked
 
-The shell serves it at a fixed, versioned path rather than each game shipping its
-own copy.
-
-- **No copying.** Nothing to forget, nothing to get out of date.
-- **One place to fix a bug.** A bridge fix reaches two hundred games on the next
-  page load, instead of two hundred re-exports that nobody will do.
-- **`/v1/` is a promise.** Games exported today keep loading `v1` forever. A
-  breaking protocol change ships as `/v2/` alongside it, and old games go on
-  working untouched.
-
-The cost: a game cannot connect to the bridge if the shell is unreachable. That
-is not a real loss — a game with no shell has no player, no wallet and no way
-back to Telegram anyway.
-
----
-
-## Every export after that
-
-1. **Export Project…** → into your export folder → filename `index.html`
-2. Deploy that folder to its **own origin** (drag it onto Vercel)
-3. Paste the URL into the Mini App's **Catalogue** screen
-
-No file copying. No `index.html` editing. No commits, no redeploys.
-
----
-
-## Checking it worked
-
-Open the game from the bot. The player's name should appear where the game shows
-it — Godot has no way to know that, so its presence *is* the proof the bridge
-connected.
-
-If Tap Rush shows `bridge: no SGA`, the Head Include is missing or misspelled.
-That is the only thing that produces it once the game is being framed.
-
----
-
-## One origin per game
-
-Never point two games at the same host. The bridge identifies a game by its
-origin, so two games sharing one cannot be told apart, and a bug in either
-becomes a bug in both.
-
-The Catalogue screen rejects a duplicate origin, and rejects a URL with a path
-for the same reason — `host/game-a` and `host/game-b` are the same origin.
+The game never receives Telegram initData, the platform login token, a wallet private key, or signing power. Wallet connection and transaction approval stay in the Wallet Mini App.

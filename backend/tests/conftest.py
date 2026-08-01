@@ -30,7 +30,7 @@ os.environ.setdefault("WEBHOOK_SECRET", secrets.token_urlsafe(32))
 os.environ.setdefault("JWT_SECRET", secrets.token_urlsafe(32))
 os.environ.setdefault("PUBLIC_API_URL", "https://api.test")
 os.environ.setdefault("MINIAPP_URL", "https://play.test")
-os.environ.setdefault("ALLOWED_ORIGINS", "https://play.test")
+os.environ.setdefault("ALLOWED_ORIGINS", "https://play.test,https://game.test")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./test_sga.db")
 
 

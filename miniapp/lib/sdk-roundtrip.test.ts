@@ -105,3 +105,122 @@ describe("SDK <-> shell protocol agreement", () => {
     expect(seen).toHaveLength(0);
   });
 });
+
+
+function loadDirectSdk() {
+  const calls: Array<{ url: string; init: RequestInit }> = [];
+  const haptics: string[] = [];
+  const stored = new Map<string, string>();
+  let closed = false;
+
+  const win: any = {
+    location: { search: "" },
+    parent: { postMessage: () => { throw new Error("direct mode must not postMessage"); } },
+    addEventListener: () => {},
+    URL,
+    URLSearchParams,
+    SGA_CONFIG: {
+      apiUrl: "https://api.test",
+      gameSlug: "tap-rush",
+    },
+    Telegram: {
+      WebApp: {
+        initData: "signed-telegram-data",
+        platform: "android",
+        ready: () => {},
+        expand: () => {},
+        close: () => { closed = true; },
+        HapticFeedback: {
+          impactOccurred: (style: string) => haptics.push(style),
+          notificationOccurred: (style: string) => haptics.push(style),
+        },
+      },
+    },
+    sessionStorage: {
+      getItem: (key: string) => stored.get(key) ?? null,
+      setItem: (key: string, value: string) => stored.set(key, value),
+      removeItem: (key: string) => stored.delete(key),
+    },
+    fetch: async (url: string, init: RequestInit = {}) => {
+      calls.push({ url, init });
+      return {
+        ok: true,
+        text: async () => JSON.stringify({
+          access_token: "game-token-never-exposed",
+          expires_in: 14400,
+          game_slug: "tap-rush",
+          player: {
+            display_name: "Ada",
+            wallet_address: "WalletPublicAddress",
+          },
+        }),
+      };
+    },
+  };
+
+  const ctx: any = {
+    window: win,
+    document: { referrer: "https://web.telegram.org/" },
+    URL,
+    URLSearchParams,
+    setTimeout,
+  };
+
+  // eslint-disable-next-line no-new-func
+  new Function("window", "document", "URL", "URLSearchParams", "setTimeout", SDK)(
+    win,
+    ctx.document,
+    URL,
+    URLSearchParams,
+    setTimeout,
+  );
+
+  return {
+    sdk: win.SGA,
+    calls,
+    haptics,
+    stored,
+    wasClosed: () => closed,
+  };
+}
+
+describe("SDK direct Telegram mode", () => {
+  it("authenticates with the game endpoint and exposes only public player data", async () => {
+    const direct = loadDirectSdk();
+    const handshake: any[] = [];
+    const players: any[] = [];
+
+    expect(direct.sdk.isAvailable()).toBe(true);
+    direct.sdk.handshake((value: any) => handshake.push(value));
+    direct.sdk.getPlayer((value: any) => players.push(value));
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(handshake).toEqual([
+      { version: 1, gameSlug: "tap-rush", surface: "mobile" },
+    ]);
+    expect(direct.calls).toHaveLength(1);
+    expect(direct.calls[0].url).toBe("https://api.test/api/game/auth");
+    expect(JSON.parse(String(direct.calls[0].init.body))).toEqual({
+      init_data: "signed-telegram-data",
+      game_slug: "tap-rush",
+    });
+    expect(players).toEqual([
+      { displayName: "Ada", walletAddress: "WalletPublicAddress" },
+    ]);
+    expect(JSON.stringify(players)).not.toContain("game-token-never-exposed");
+    expect(direct.stored.get("sga.game.session.tap-rush")).toBe(
+      "game-token-never-exposed",
+    );
+  });
+
+  it("uses Telegram haptics and closes the direct game", () => {
+    const direct = loadDirectSdk();
+
+    direct.sdk.haptic("success");
+    direct.sdk.exit();
+
+    expect(direct.haptics).toEqual(["success"]);
+    expect(direct.wasClosed()).toBe(true);
+  });
+});

@@ -100,6 +100,57 @@ async def _issue_pair(
     )
 
 
+async def authenticate_telegram_user(
+    init_data: str,
+    *,
+    session: AsyncSession,
+    settings: Settings,
+) -> User:
+    """Validate Telegram identity and return the corresponding platform user."""
+    try:
+        data = validate_init_data(
+            init_data,
+            bot_token=settings.bot_token,
+            max_age_seconds=settings.initdata_max_age,
+        )
+    except InitDataError as exc:
+        logger.warning("initData rejected: %s", exc)
+        debug_capture.capture(init_data)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not verify your Telegram session. Reopen the app.",
+        ) from exc
+
+    if _replay_guard.seen(data.hash):
+        logger.info(
+            "initData replayed for telegram_id=%s - issuing a new session",
+            data.user.id,
+        )
+
+    tg = data.user
+    user = await session.scalar(select(User).where(User.telegram_id == tg.id))
+    if user is None:
+        user = User(telegram_id=tg.id)
+        session.add(user)
+
+    user.username = tg.username
+    user.first_name = tg.first_name
+    user.last_name = tg.last_name
+    user.language_code = tg.language_code
+    user.is_premium = tg.is_premium
+    user.photo_url = tg.photo_url
+    user.last_seen_at = datetime.now(timezone.utc)
+    await session.flush()
+
+    if user.is_blocked:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account is suspended.",
+        )
+
+    return user
+
+
 @router.post(
     "/telegram",
     response_model=TokenPair,
@@ -110,79 +161,13 @@ async def login_with_telegram(
     session: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> TokenPair:
-    """Exchange a verified Mini App `initData` string for a session.
-
-    This is the only endpoint that creates users. If it is wrong, everything
-    else is wrong, so it does its checks in a deliberate order:
-    signature, then freshness, then replay, then account state.
-    """
-    try:
-        data = validate_init_data(
-            body.init_data,
-            bot_token=settings.bot_token,
-            max_age_seconds=settings.initdata_max_age,
-        )
-    except InitDataError as exc:
-        # The client gets a vague message on purpose — a precise one tells an
-        # attacker which check they tripped. The real reason belongs here.
-        logger.warning("initData rejected: %s", exc)
-        debug_capture.capture(body.init_data)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not verify your Telegram session. Reopen the app.",
-        ) from exc
-
-    if _replay_guard.seen(data.hash):
-        # Observed, recorded, and deliberately not fatal.
-        #
-        # Telegram hands the same initData back every time it relaunches a Mini
-        # App, and it relaunches on every return from another app — which is
-        # precisely what linking a wallet requires: Telegram → wallet → approve
-        # → back. The client tries its refresh token first to avoid this, but a
-        # relaunch can discard sessionStorage, leaving the launch payload as the
-        # only credential the app still holds. Rejecting it strands the user
-        # mid-flow with an error they cannot act on; "reopen the app" produces
-        # the very same string again.
-        #
-        # What is actually given up is small. The signature still has to verify
-        # against the bot token, auth_date still has to be inside the window,
-        # and the string only ever travels over HTTPS to this origin. A second
-        # redemption yields the same user a fresh session — the same thing an
-        # honest relaunch asks for.
-        #
-        # This log line is the signal worth watching: a burst of repeats for one
-        # telegram_id from changing IPs is what a leaked payload looks like.
-        logger.info(
-            "initData replayed for telegram_id=%s — issuing a new session",
-            data.user.id,
-        )
-
-    tg = data.user
-    user = await session.scalar(select(User).where(User.telegram_id == tg.id))
-
-    if user is None:
-        user = User(telegram_id=tg.id)
-        session.add(user)
-
-    # Telegram is the source of truth for profile fields; refresh on each login.
-    user.username = tg.username
-    user.first_name = tg.first_name
-    user.last_name = tg.last_name
-    user.language_code = tg.language_code
-    user.is_premium = tg.is_premium
-    user.photo_url = tg.photo_url
-    user.last_seen_at = datetime.now(timezone.utc)
-
-    await session.flush()
-
-    if user.is_blocked:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This account is suspended.",
-        )
-
+    """Exchange verified Telegram initData for a full platform session."""
+    user = await authenticate_telegram_user(
+        body.init_data,
+        session=session,
+        settings=settings,
+    )
     return await _issue_pair(session, user, settings)
-
 
 @router.post(
     "/refresh",

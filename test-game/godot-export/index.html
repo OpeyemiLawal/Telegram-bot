@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
-		<title>SGA Bridge Test</title>
+		<title>Tap Rush</title>
 		<style>
 html, body, #canvas {
 	margin: 0;
@@ -92,6 +92,13 @@ body {
 		</style>
 		<link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
 <link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>
+window.SGA_CONFIG = {
+	apiUrl: "https://sga-api-v924.onrender.com",
+	gameSlug: "tap-rush"
+};
+</script>
 <script src="https://sga-miniapp.vercel.app/sdk/v1/sga-sdk.js"></script>
 	</head>
 	<body>

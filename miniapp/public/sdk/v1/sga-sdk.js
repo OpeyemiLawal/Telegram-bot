@@ -1,87 +1,61 @@
 /**
- * Solana Games PlatformSDK — the game's side of the bridge.
+ * Solana Games SDK for Godot web exports.
  *
- * Copy this file next to your Godot HTML export and load it *before* the engine:
+ * It supports two launch modes without changing game code:
  *
- *     <script src="sga-sdk.js"></script>
- *     <script src="index.js"></script>   <!-- Godot -->
+ * 1. Direct Telegram mode: the game is opened from a bot Web App button,
+ *    verifies Telegram initData with the SGA backend, and receives a restricted
+ *    game session plus the player's linked public wallet address.
  *
- * Plain ES5-compatible JavaScript with no build step and no imports, on purpose.
- * Godot's HTML export is a fixed set of files that you drop onto a static host;
- * anything needing bundling would mean a toolchain in front of every game.
+ * 2. Legacy shell mode: an older platform page embeds the game and answers the
+ *    same API through postMessage.
  *
- * ---------------------------------------------------------------------------
- * Calling it from GDScript
- * ---------------------------------------------------------------------------
- *
- *     if OS.has_feature("web"):
- *         var sdk := JavaScriptBridge.get_interface("SGA")
- *
- *         # Establish the channel. Do this once, on ready.
- *         sdk.handshake()
- *
- *         # Callbacks have to be kept alive — a JavaScriptBridge callback that
- *         # goes out of scope is garbage collected and never fires. Store it on
- *         # the node, not in a local.
- *         _on_player = JavaScriptBridge.create_callback(_player_received)
- *         sdk.getPlayer(_on_player)
- *
- *         sdk.haptic("light")
- *         sdk.exit()
- *
- *     func _player_received(args):
- *         var player = args[0]
- *         print(player.displayName, " ", player.walletAddress)
- *
- * ---------------------------------------------------------------------------
- * What a game can and cannot do
- * ---------------------------------------------------------------------------
- *
- * Available: handshake, getPlayer, haptic, exit.
- *
- * Not available, and not an omission: the player's session token, their refresh
- * token, the Telegram initData, and any ability to sign or send a transaction.
- * The shell holds the wallet. When money arrives, a game will *request* a
- * transaction and the shell will present it to the player's wallet for approval
- * — the game will never hold the authority to move funds, only to ask.
+ * The SDK never exposes Telegram initData or either mode's access token to
+ * Godot. Games receive only displayName and walletAddress.
  */
 
 (function () {
   "use strict";
 
   var VERSION = 1;
+  var config = window.SGA_CONFIG || {};
+  var telegram = window.Telegram && window.Telegram.WebApp;
+  var apiBase = String(config.apiUrl || "").replace(/\/+$/, "");
+  var gameSlug = String(config.gameSlug || "");
+  var directMode = Boolean(telegram && telegram.initData && apiBase && gameSlug);
 
-  // The shell's origin, captured from the URL the shell embedded us with:
-  //   https://your-game.example/?sgaOrigin=https%3A%2F%2Fsga-miniapp.vercel.app
-  //
-  // Read from the query string rather than hardcoded so the same build runs
-  // against a preview deployment, and so a game is never shipped with a stale
-  // origin baked in. Falls back to document.referrer's origin, which browsers
-  // set to the embedding page.
   var shellOrigin = (function () {
+    if (directMode) return null;
     try {
       var fromQuery = new URLSearchParams(window.location.search).get("sgaOrigin");
       if (fromQuery) return new URL(fromQuery).origin;
       if (document.referrer) return new URL(document.referrer).origin;
-    } catch (e) {
-      /* fall through */
+    } catch (error) {
+      /* no trusted shell origin */
     }
     return null;
   })();
 
+  var bridgeMode = Boolean(
+    !directMode &&
+      shellOrigin &&
+      window.parent &&
+      window.parent !== window,
+  );
+
   var pending = {};
   var counter = 0;
 
-  function send(type, payload, onResult) {
-    if (!window.parent || window.parent === window) {
-      // Opened directly rather than embedded. Report it instead of hanging: a
-      // developer loading the game standalone should see why nothing responds.
-      if (onResult) onResult({ ok: false, error: "Not running inside the shell" });
-      return;
-    }
+  function wrap(callback) {
+    if (!callback) return null;
+    return function (result) {
+      callback(result.ok ? result.data || {} : { error: result.error });
+    };
+  }
 
-    if (!shellOrigin) {
-      if (onResult) onResult({ ok: false, error: "Shell origin unknown" });
+  function bridgeSend(type, payload, onResult) {
+    if (!bridgeMode) {
+      if (onResult) onResult({ ok: false, error: "Platform connection unavailable" });
       return;
     }
 
@@ -90,20 +64,13 @@
 
     if (onResult) {
       pending[id] = onResult;
-      // Never leave a caller waiting forever. A shell that has navigated away,
-      // or a message dropped mid-reload, would otherwise strand a Godot callback
-      // that the game is holding a reference to.
       setTimeout(function () {
-        if (pending[id]) {
-          delete pending[id];
-          onResult({ ok: false, error: "Timed out" });
-        }
+        if (!pending[id]) return;
+        delete pending[id];
+        onResult({ ok: false, error: "Timed out" });
       }, 10000);
     }
 
-    // Addressed to the shell's exact origin, never "*". A wildcard would post
-    // the message — and anything in it — to whatever document happens to be in
-    // the parent frame.
     window.parent.postMessage(
       { sga: VERSION, id: id, type: type, payload: payload },
       shellOrigin,
@@ -111,9 +78,7 @@
   }
 
   window.addEventListener("message", function (event) {
-    // The shell is the only party we accept answers from. Without this check any
-    // frame or extension could resolve a pending request with fabricated data.
-    if (event.origin !== shellOrigin) return;
+    if (!bridgeMode || event.origin !== shellOrigin) return;
 
     var data = event.data;
     if (!data || data.sga !== VERSION || typeof data.id !== "string") return;
@@ -125,45 +90,194 @@
     handler({ ok: data.ok === true, data: data.data, error: data.error });
   });
 
-  /**
-   * Godot's `create_callback` produces a function expecting positional
-   * arguments, so results are passed as a single object rather than as
-   * (err, value) — a GDScript callback receives `args[0]` and reading a field
-   * off it is more legible than remembering an argument order.
-   */
-  function wrap(callback) {
-    if (!callback) return null;
-    return function (result) {
-      callback(result.ok ? result.data || {} : { error: result.error });
+  function storageKey() {
+    return "sga.game.session." + gameSlug;
+  }
+
+  function readStoredToken() {
+    try {
+      return window.sessionStorage.getItem(storageKey());
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function storeToken(token) {
+    try {
+      if (token) window.sessionStorage.setItem(storageKey(), token);
+      else window.sessionStorage.removeItem(storageKey());
+    } catch (error) {
+      /* Session restoration is optional. */
+    }
+  }
+
+  function readResponse(response) {
+    return response.text().then(function (text) {
+      var body = {};
+      try {
+        body = text ? JSON.parse(text) : {};
+      } catch (error) {
+        body = {};
+      }
+
+      if (!response.ok) {
+        var message =
+          typeof body.detail === "string" ? body.detail : "Game authentication failed.";
+        throw new Error(message);
+      }
+      return body;
+    });
+  }
+
+  function apiRequest(path, options) {
+    return window
+      .fetch(apiBase + "/api/game" + path, options || {})
+      .then(readResponse);
+  }
+
+  var playerCache = null;
+  var authInFlight = null;
+
+  function playerResult(body) {
+    var player = body && body.player;
+    if (!player) throw new Error("Backend returned no player.");
+    return {
+      displayName: String(player.display_name || "player"),
+      walletAddress: player.wallet_address || null,
     };
+  }
+
+  function loginDirect() {
+    return apiRequest("/auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        init_data: telegram.initData,
+        game_slug: gameSlug,
+      }),
+    }).then(function (body) {
+      storeToken(body.access_token || null);
+      return playerResult(body);
+    });
+  }
+
+  function restoreDirect(token) {
+    return apiRequest("/session", {
+      headers: { Authorization: "Bearer " + token },
+    })
+      .then(playerResult)
+      .catch(function () {
+        storeToken(null);
+        return loginDirect();
+      });
+  }
+
+  function getDirectPlayer(onResult) {
+    if (playerCache) {
+      onResult({ ok: true, data: playerCache });
+      return;
+    }
+
+    if (!authInFlight) {
+      var stored = readStoredToken();
+      authInFlight = (stored ? restoreDirect(stored) : loginDirect()).then(
+        function (player) {
+          playerCache = player;
+          authInFlight = null;
+          return player;
+        },
+        function (error) {
+          authInFlight = null;
+          throw error;
+        },
+      );
+    }
+
+    authInFlight
+      .then(function (player) {
+        onResult({ ok: true, data: player });
+      })
+      .catch(function (error) {
+        onResult({
+          ok: false,
+          error: error && error.message ? error.message : "Could not authenticate game.",
+        });
+      });
+  }
+
+  function telegramSurface() {
+    var platform = telegram && telegram.platform ? telegram.platform : "unknown";
+    if (platform === "android" || platform === "ios") return "mobile";
+    if (platform.indexOf("web") === 0) return "web";
+    return "desktop";
+  }
+
+  function directHandshake(onResult) {
+    telegram.ready();
+    telegram.expand();
+    onResult({
+      ok: true,
+      data: {
+        version: VERSION,
+        gameSlug: gameSlug,
+        surface: telegramSurface(),
+      },
+    });
+  }
+
+  function directHaptic(style) {
+    var feedback = telegram && telegram.HapticFeedback;
+    if (!feedback) return;
+    if (
+      style === "success" ||
+      style === "error" ||
+      style === "warning"
+    ) {
+      feedback.notificationOccurred(style);
+    } else {
+      feedback.impactOccurred(style || "light");
+    }
   }
 
   window.SGA = {
     version: VERSION,
 
-    /** True when embedded by a shell we can talk to. */
     isAvailable: function () {
-      return Boolean(shellOrigin && window.parent && window.parent !== window);
+      return directMode || bridgeMode;
     },
 
-    /** Call once on ready. Returns { version, gameSlug, surface }. */
     handshake: function (callback) {
-      send("handshake", undefined, wrap(callback));
+      var done = wrap(callback);
+      if (directMode) {
+        directHandshake(done || function () {});
+        return;
+      }
+      bridgeSend("handshake", undefined, done);
     },
 
-    /** Public identity: { displayName, walletAddress }. Never a token. */
     getPlayer: function (callback) {
-      send("getPlayer", undefined, wrap(callback));
+      var done = wrap(callback);
+      if (directMode) {
+        if (done) getDirectPlayer(done);
+        return;
+      }
+      bridgeSend("getPlayer", undefined, done);
     },
 
-    /** "light" | "medium" | "heavy" | "success" | "error" | "warning" */
     haptic: function (style) {
-      send("haptic", { style: style || "light" }, null);
+      if (directMode) {
+        directHaptic(style || "light");
+        return;
+      }
+      bridgeSend("haptic", { style: style || "light" }, null);
     },
 
-    /** Ask the shell to leave the game and return to the catalogue. */
     exit: function () {
-      send("exit", undefined, null);
+      if (directMode) {
+        telegram.close();
+        return;
+      }
+      bridgeSend("exit", undefined, null);
     },
   };
 })();

@@ -1,38 +1,33 @@
-"""Session tokens.
-
-Two-token scheme:
-
-  access token   JWT, 15 minutes, held in memory by the Mini App, sent as
-                 `Authorization: Bearer`. Stateless — no DB hit per request.
-
-  refresh token  opaque 256-bit random string, 30 days, stored in the DB as a
-                 SHA-256 hash. Rotated on every use. Reusing a rotated token
-                 revokes the whole family, which is how you detect theft.
-
-The refresh token is the only long-lived secret on the client, and it never
-touches localStorage — see miniapp/lib/auth.tsx for where it does live.
-"""
+"""Session tokens for the platform Mini App and direct games."""
 
 from __future__ import annotations
 
 import hashlib
 import secrets
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import jwt
 
 ACCESS_TOKEN_TTL = timedelta(minutes=15)
+GAME_TOKEN_TTL = timedelta(hours=4)
 REFRESH_TOKEN_TTL = timedelta(days=30)
 _ALGORITHM = "HS256"
 
 
 class TokenError(Exception):
-    """Access token was absent, malformed, expired, or not ours."""
+    """A token was absent, malformed, expired, or issued for another scope."""
+
+
+@dataclass(frozen=True)
+class GameTokenClaims:
+    user_id: uuid.UUID
+    game_slug: str
 
 
 def issue_access_token(*, user_id: uuid.UUID, secret: str, issuer: str) -> tuple[str, int]:
-    """Return (jwt, expires_in_seconds)."""
+    """Return a full-platform access token and its lifetime in seconds."""
     now = datetime.now(timezone.utc)
     expires_at = now + ACCESS_TOKEN_TTL
     payload = {
@@ -46,8 +41,31 @@ def issue_access_token(*, user_id: uuid.UUID, secret: str, issuer: str) -> tuple
     return token, int(ACCESS_TOKEN_TTL.total_seconds())
 
 
+def issue_game_token(
+    *,
+    user_id: uuid.UUID,
+    game_slug: str,
+    secret: str,
+    issuer: str,
+) -> tuple[str, int]:
+    """Return a token that is valid only for one direct-hosted game."""
+    now = datetime.now(timezone.utc)
+    expires_at = now + GAME_TOKEN_TTL
+    payload = {
+        "sub": str(user_id),
+        "iss": issuer,
+        "scope": "game",
+        "game": game_slug,
+        "iat": int(now.timestamp()),
+        "exp": int(expires_at.timestamp()),
+        "jti": secrets.token_hex(8),
+    }
+    token = jwt.encode(payload, secret, algorithm=_ALGORITHM)
+    return token, int(GAME_TOKEN_TTL.total_seconds())
+
+
 def read_access_token(token: str, *, secret: str, issuer: str) -> uuid.UUID:
-    """Return the user id carried by a valid token, else raise TokenError."""
+    """Return the user id carried by a full-platform access token."""
     try:
         payload = jwt.decode(
             token,
@@ -63,6 +81,39 @@ def read_access_token(token: str, *, secret: str, issuer: str) -> uuid.UUID:
         return uuid.UUID(payload["sub"])
     except (KeyError, ValueError) as exc:
         raise TokenError("token subject is not a user id") from exc
+
+
+def read_game_token(
+    token: str,
+    *,
+    secret: str,
+    issuer: str,
+) -> GameTokenClaims:
+    """Return the user and game carried by a restricted game token."""
+    try:
+        payload = jwt.decode(
+            token,
+            secret,
+            algorithms=[_ALGORITHM],
+            issuer=issuer,
+            options={"require": ["exp", "iat", "sub", "iss", "scope", "game"]},
+        )
+    except jwt.PyJWTError as exc:
+        raise TokenError(str(exc)) from exc
+
+    if payload.get("scope") != "game":
+        raise TokenError("token is not game-scoped")
+
+    game_slug = payload.get("game")
+    if not isinstance(game_slug, str) or not game_slug:
+        raise TokenError("token has no game slug")
+
+    try:
+        user_id = uuid.UUID(payload["sub"])
+    except (KeyError, ValueError) as exc:
+        raise TokenError("token subject is not a user id") from exc
+
+    return GameTokenClaims(user_id=user_id, game_slug=game_slug)
 
 
 def generate_refresh_token() -> tuple[str, str]:

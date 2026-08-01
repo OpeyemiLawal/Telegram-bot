@@ -12,10 +12,23 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.bot.keyboards import games_menu, main_menu
 from app.bot.menu_sync import remember_menu
 from app.db import SessionMaker
-from app.models import User
+from app.models import GameRecord, User
 
 router = Router(name="main")
 logger = logging.getLogger("sga.bot")
+
+
+async def _games_keyboard():
+    """Load live games at click time so admin URL changes apply immediately."""
+    async with SessionMaker() as session:
+        records = await session.scalars(
+            select(GameRecord)
+            .where(GameRecord.status == "live")
+            .order_by(GameRecord.sort_order, GameRecord.title)
+        )
+        return games_menu(
+            [(record.title, record.embed_url) for record in records]
+        )
 
 
 async def _reply_with_menu(message: Message, text: str) -> None:
@@ -127,7 +140,13 @@ async def handle_wallet(message: Message) -> None:
 
 @router.message(Command("games"))
 async def handle_games(message: Message) -> None:
-    await message.answer("Choose a game.", reply_markup=games_menu())
+    try:
+        markup = await _games_keyboard()
+    except SQLAlchemyError:
+        logger.exception("Could not load game buttons")
+        await message.answer("Games are temporarily unavailable.")
+        return
+    await message.answer("Choose a game.", reply_markup=markup)
 
 
 @router.message(Command("help"))
@@ -137,8 +156,15 @@ async def handle_help(message: Message) -> None:
 
 @router.callback_query(F.data == "show_games")
 async def handle_games_callback(query: CallbackQuery) -> None:
+    try:
+        markup = await _games_keyboard()
+    except SQLAlchemyError:
+        logger.exception("Could not load game buttons")
+        await query.answer("Games are temporarily unavailable.", show_alert=True)
+        return
+
     if query.message is not None:
-        await query.message.edit_reply_markup(reply_markup=games_menu())
+        await query.message.edit_reply_markup(reply_markup=markup)
     await query.answer()
 
 

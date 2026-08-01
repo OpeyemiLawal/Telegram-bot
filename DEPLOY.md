@@ -11,7 +11,7 @@ and step 5 needs a URL from step 4.
 
 The two halves reference each other:
 
-- The backend needs `MINIAPP_URL` and `ALLOWED_ORIGINS` (the Vercel URL).
+- The backend needs MINIAPP_URL plus ALLOWED_ORIGINS for the wallet app and every direct game.
 - The Mini App needs `NEXT_PUBLIC_API_URL` (the Render URL).
 
 You cannot know either URL before deploying. So: deploy the Mini App first with
@@ -116,11 +116,9 @@ and its Postgres database in one action.
    |---|---|
    | `BOT_TOKEN` | paste from BotFather — no quotes, no trailing space |
    | `MINIAPP_URL` | the Vercel URL from step 2 |
-   | `ALLOWED_ORIGINS` | the same Vercel URL, again |
+   | ALLOWED_ORIGINS | https://sga-miniapp.vercel.app,https://sga-test-game.vercel.app |
 
-   `ALLOWED_ORIGINS` must match `MINIAPP_URL` character for character. A
-   trailing slash or `http` instead of `https` means CORS blocks every login,
-   and the browser error will not tell you that clearly.
+   ALLOWED_ORIGINS is comma-separated. Include the wallet Mini App and every direct game origin exactly. A trailing slash, wrong protocol, or missing origin blocks authentication.
 
 4. **Apply**. First build takes 3–5 minutes.
 5. When it goes live, check the service URL at the top of the page. If it is
@@ -279,7 +277,7 @@ Both Render and Vercel watch `main` and rebuild on push. Nothing else to do.
 |---|---|
 | Mini App shows "Open this from Telegram" | You opened the Vercel URL in a browser tab. There is no `initData` outside Telegram. Open it from the bot. |
 | "Could not verify your Telegram session" | `BOT_TOKEN` on Render does not match the bot that opened the app. Check for a quote or trailing space — `config.py` catches most of these at startup, so also read the deploy log. |
-| Login fails, browser console shows a CORS error | `ALLOWED_ORIGINS` does not exactly equal your Vercel URL. |
+| Login fails, browser console shows a CORS error | The current wallet/game origin is missing from ALLOWED_ORIGINS or does not match exactly. |
 | Bot ignores `/start` | Webhook not registered. Check `PUBLIC_API_URL` matches the real Render URL, then read Render's logs. |
 | Wallet button does nothing | `NEXT_PUBLIC_REOWN_PROJECT_ID` missing, or set but not redeployed. |
 | Everything worked, now 500s on any DB call | Free Postgres expired. |

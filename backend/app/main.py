@@ -8,7 +8,7 @@ from aiogram.types import Update
 from fastapi import APIRouter, FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import admin, auth, games, public, wallet
+from app.api import admin, auth, game_sessions, games, public, wallet
 from app.bot.instance import bot, dispatcher
 from app.bot.keyboards import persistent_menu_button
 from app.config import get_settings
@@ -92,6 +92,7 @@ app.add_middleware(
 
 api = APIRouter(prefix="/api")
 api.include_router(auth.router)
+api.include_router(game_sessions.router)
 api.include_router(games.router)
 api.include_router(wallet.router)
 api.include_router(admin.router)

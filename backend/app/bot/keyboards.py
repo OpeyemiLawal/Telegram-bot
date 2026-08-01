@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -26,19 +28,19 @@ def main_menu() -> InlineKeyboardMarkup:
     )
 
 
-def games_menu() -> InlineKeyboardMarkup:
-    """Games are selected in chat, then launched directly."""
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="🎮 Tap Rush",
-                    web_app=_url("/play/tap-rush"),
-                )
-            ],
-            [InlineKeyboardButton(text="← Back", callback_data="main_menu")],
+def games_menu(games: Iterable[tuple[str, str]]) -> InlineKeyboardMarkup:
+    """Build direct Telegram Web App buttons from registered game origins."""
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=f"🎮 {title}",
+                web_app=WebAppInfo(url=url.rstrip("/")),
+            )
         ]
-    )
+        for title, url in games
+    ]
+    rows.append([InlineKeyboardButton(text="← Back", callback_data="main_menu")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def open_app_button(label: str = "Open", path: str = "") -> InlineKeyboardMarkup:
@@ -48,5 +50,5 @@ def open_app_button(label: str = "Open", path: str = "") -> InlineKeyboardMarkup
 
 
 def persistent_menu_button() -> MenuButtonWebApp:
-    """Replaces the chat's hamburger menu with a direct launch button."""
+    """The native chat menu opens the central wallet Mini App."""
     return MenuButtonWebApp(text="Wallet", web_app=_url("/wallet"))
