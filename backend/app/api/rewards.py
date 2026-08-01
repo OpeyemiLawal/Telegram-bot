@@ -29,6 +29,8 @@ class RewardSummaryOut(BaseModel):
     claims_enabled: bool
     minimum_claim: int
     can_claim: bool
+    pending_error: str | None
+    can_reset_pending: bool
 
 
 class ClaimOut(BaseModel):
@@ -39,6 +41,12 @@ class ClaimOut(BaseModel):
     status: str
     signature: str | None
     explorer_url: str | None
+    message: str
+
+
+class ResetClaimOut(BaseModel):
+    restored_amount: int
+    token_symbol: str
     message: str
 
 
@@ -57,6 +65,25 @@ def _explorer_url(signature: str | None, rpc_url: str) -> str | None:
     return f"https://explorer.solana.com/tx/{signature}{suffix}"
 
 
+async def _latest_pending(
+    user_id: uuid.UUID,
+    session: AsyncSession,
+    *,
+    lock: bool = False,
+) -> RewardClaim | None:
+    query = (
+        select(RewardClaim)
+        .where(
+            RewardClaim.user_id == user_id,
+            RewardClaim.status.in_(("pending", "submitted")),
+        )
+        .order_by(RewardClaim.created_at.desc())
+    )
+    if lock:
+        query = query.with_for_update()
+    return await session.scalar(query)
+
+
 async def _pending_amount(user_id: uuid.UUID, session: AsyncSession) -> int:
     amount = await session.scalar(
         select(func.coalesce(func.sum(RewardClaim.amount), 0)).where(
@@ -72,6 +99,11 @@ def _claim_out(claim: RewardClaim, settings: Settings) -> ClaimOut:
         message = "Gamer Tokens were sent to your linked wallet."
     elif claim.status == "submitted":
         message = "Transfer submitted to Solana."
+    elif claim.last_error:
+        message = (
+            "Transfer failed before confirmation. Reset this devnet claim after "
+            "fixing the token mint."
+        )
     else:
         message = "Claim is safely queued. No second claim will be created."
 
@@ -97,6 +129,14 @@ async def reward_summary_for_user(
     lifetime_earned = account.lifetime_earned if account else 0
     lifetime_claimed = account.lifetime_claimed if account else 0
     enabled = _configured(settings)
+    pending_claim = await _latest_pending(user.id, session)
+    resettable = bool(
+        "devnet" in settings.reward_rpc_url.lower()
+        and pending_claim
+        and pending_claim.status == "pending"
+        and pending_claim.signature is None
+        and pending_claim.last_error
+    )
 
     return RewardSummaryOut(
         available_amount=available,
@@ -112,6 +152,8 @@ async def reward_summary_for_user(
             and user.wallet_address
             and available >= settings.reward_min_claim
         ),
+        pending_error=pending_claim.last_error if pending_claim else None,
+        can_reset_pending=resettable,
     )
 
 
@@ -129,14 +171,7 @@ async def claim_for_user(
             detail="Gamer Token claims are not enabled yet.",
         )
 
-    existing = await session.scalar(
-        select(RewardClaim)
-        .where(
-            RewardClaim.user_id == user.id,
-            RewardClaim.status.in_(("pending", "submitted")),
-        )
-        .order_by(RewardClaim.created_at.desc())
-    )
+    existing = await _latest_pending(user.id, session)
     if existing is not None:
         return _claim_out(existing, settings)
 
@@ -191,6 +226,44 @@ async def claim_for_user(
     return _claim_out(claim, settings)
 
 
+async def reset_failed_claim_for_user(
+    user: User,
+    session: AsyncSession,
+    settings: Settings,
+) -> ResetClaimOut:
+    """Restore a failed unsigned claim on devnet so it can be attempted again."""
+    if "devnet" not in settings.reward_rpc_url.lower():
+        raise HTTPException(status_code=404, detail="No such reward action.")
+
+    claim = await _latest_pending(user.id, session, lock=True)
+    if (
+        claim is None
+        or claim.status != "pending"
+        or claim.signature is not None
+        or not claim.last_error
+    ):
+        raise HTTPException(status_code=409, detail="No failed devnet claim to reset.")
+
+    account = await session.scalar(
+        select(RewardAccount)
+        .where(RewardAccount.user_id == user.id)
+        .with_for_update()
+    )
+    if account is None:
+        raise HTTPException(status_code=409, detail="Reward account was not found.")
+
+    account.available_amount += claim.amount
+    account.lifetime_claimed = max(0, account.lifetime_claimed - claim.amount)
+    claim.status = "failed"
+    claim.last_error = "Reset by player after a failed devnet payout."
+    await session.flush()
+    return ResetClaimOut(
+        restored_amount=claim.amount,
+        token_symbol=settings.gamer_token_symbol,
+        message="Failed devnet claim reset. You can claim again after fixing the mint.",
+    )
+
+
 @router.get("", response_model=RewardSummaryOut)
 async def reward_summary(
     user: User = Depends(current_user),
@@ -198,6 +271,15 @@ async def reward_summary(
     settings: Settings = Depends(get_settings),
 ) -> RewardSummaryOut:
     return await reward_summary_for_user(user, session, settings)
+
+
+@router.post("/claim/reset", response_model=ResetClaimOut)
+async def reset_claim(
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> ResetClaimOut:
+    return await reset_failed_claim_for_user(user, session, settings)
 
 
 @router.post("/claim", response_model=ClaimOut)

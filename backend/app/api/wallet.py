@@ -185,6 +185,7 @@ class BalanceOut(BaseModel):
     # nothing.
     token_configured: bool
     token_available: bool
+    token_error: str | None
 
 
 @router.get("/balance", response_model=BalanceOut)
@@ -217,6 +218,7 @@ async def wallet_balance(
             token_display="0",
             token_configured=bool(mint),
             token_available=True,
+            token_error=None,
         )
 
     lamports = 0
@@ -230,13 +232,15 @@ async def wallet_balance(
 
     token_raw, token_decimals = (0, 0)
     token_available = True
+    token_error = None
     if mint:
         try:
             token_raw, token_decimals = await solana.get_token_amount(
                 user.wallet_address, mint, rpc_url=settings.reward_rpc_url
             )
-        except solana.SolanaError:
+        except solana.SolanaError as exc:
             token_available = False
+            token_error = str(exc)
 
     return BalanceOut(
         address=user.wallet_address,
@@ -249,6 +253,7 @@ async def wallet_balance(
         token_display=solana.format_units(token_raw, token_decimals, places=0),
         token_configured=bool(mint),
         token_available=token_available,
+        token_error=token_error,
     )
 
 

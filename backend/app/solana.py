@@ -140,8 +140,13 @@ async def get_token_amount(
         raise SolanaError("Could not reach the Solana network.") from exc
 
     if "error" in body:
-        logger.warning("Solana token RPC error: %s", body["error"].get("message"))
-        raise SolanaError("The Solana network rejected the request.")
+        message = str(body["error"].get("message", "unknown error"))
+        logger.warning("Solana token RPC error: %s", message)
+        if "could not find mint" in message.lower():
+            raise SolanaError(
+                "Configured Gamer Token mint was not found on this Solana network."
+            )
+        raise SolanaError("The Solana network rejected the token balance request.")
 
     total = 0
     decimals = 0

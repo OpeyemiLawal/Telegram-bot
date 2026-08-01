@@ -281,6 +281,8 @@
       claimsEnabled: Boolean(body.claims_enabled),
       minimumClaim: body.minimum_claim,
       canClaim: Boolean(body.can_claim),
+      pendingError: body.pending_error || null,
+      canResetPending: Boolean(body.can_reset_pending),
     };
   }
 
@@ -408,6 +410,19 @@
         directAuthorizedRequest("/rewards", { method: "GET" }).then(
           rewardSummaryResult,
         ),
+        done,
+      );
+    },
+
+    resetFailedRewardClaim: function (callback) {
+      var done = wrap(callback);
+      if (!done) return;
+      if (!directMode) {
+        done({ ok: false, error: "Claims require a direct Telegram launch." });
+        return;
+      }
+      finishDirect(
+        directAuthorizedRequest("/rewards/claim/reset", { method: "POST" }),
         done,
       );
     },

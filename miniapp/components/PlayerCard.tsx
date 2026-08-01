@@ -68,6 +68,12 @@ export function PlayerCard({ user }: { user: Me }) {
           </div>
         </div>
 
+        {tokenFailed && balance?.token_error && (
+          <p className="body" style={{ marginTop: 10 }}>
+            {balance.token_error}
+          </p>
+        )}
+
         {connected && (solFailed || tokenFailed) && (
           <button
             className="button button--quiet"

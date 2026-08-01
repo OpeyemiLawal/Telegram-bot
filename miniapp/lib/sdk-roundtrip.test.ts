@@ -173,6 +173,12 @@ function loadDirectSdk() {
           daily_remaining: 9900,
           token_symbol: "$Gamer",
         };
+      } else if (url.endsWith("/rewards/claim/reset")) {
+        body = {
+          restored_amount: 100,
+          token_symbol: "$Gamer",
+          message: "Failed devnet claim reset.",
+        };
       } else if (url.endsWith("/rewards/claim")) {
         body = {
           claim_id: "claim-1",
@@ -195,6 +201,8 @@ function loadDirectSdk() {
           claims_enabled: true,
           minimum_claim: 100,
           can_claim: true,
+          pending_error: null,
+          can_reset_pending: false,
         };
       }
       return {
@@ -334,6 +342,26 @@ describe("SDK direct Telegram mode", () => {
     ).toBe(true);
     expect(JSON.stringify(summaries) + JSON.stringify(claims)).not.toContain(
       "game-token-never-exposed",
+    );
+  });
+
+  it("resets a failed devnet claim through the authenticated game API", async () => {
+    const direct = loadDirectSdk();
+    const resets: any[] = [];
+
+    direct.sdk.resetFailedRewardClaim((value: any) => resets.push(value));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(resets[0]).toMatchObject({
+      restored_amount: 100,
+      token_symbol: "$Gamer",
+    });
+    expect(direct.calls[1].url).toBe(
+      "https://api.test/api/game/rewards/claim/reset",
+    );
+    expect((direct.calls[1].init.headers as any).Authorization).toBe(
+      "Bearer game-token-never-exposed",
     );
   });
 

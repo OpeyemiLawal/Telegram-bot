@@ -17,6 +17,7 @@ import {
   createWalletChallenge,
   getRewardSummary,
   linkWallet,
+  resetFailedRewardClaim,
   unlinkWallet,
   type Me,
   type RewardClaim,
@@ -736,6 +737,22 @@ function RewardsPanel({ user }: { user: Me }) {
     void load();
   }, [load]);
 
+  async function resetPending() {
+    setWorking(true);
+    setError(null);
+    try {
+      await resetFailedRewardClaim();
+      setClaim(null);
+      notify("success");
+      await load();
+    } catch (err) {
+      notify("error");
+      setError(err instanceof Error ? err.message : "Could not reset the failed claim.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
   async function claimAll() {
     setWorking(true);
     setError(null);
@@ -773,6 +790,10 @@ function RewardsPanel({ user }: { user: Me }) {
         </p>
       )}
 
+      {summary?.pending_error && (
+        <p className="wallet-panel__error">{summary.pending_error}</p>
+      )}
+
       {!user.wallet_address && (
         <p className="body">Connect a wallet before claiming.</p>
       )}
@@ -788,6 +809,15 @@ function RewardsPanel({ user }: { user: Me }) {
       {error && <p className="wallet-panel__error">{error}</p>}
 
       <div className="wallet-panel__actions">
+        {summary?.can_reset_pending && (
+          <button
+            className="button button--quiet"
+            disabled={working}
+            onClick={() => void resetPending()}
+          >
+            {working ? "Resetting..." : "Reset failed devnet claim"}
+          </button>
+        )}
         <button
           className="button"
           disabled={working || !summary?.can_claim}

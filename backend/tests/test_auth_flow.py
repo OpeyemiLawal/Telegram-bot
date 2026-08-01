@@ -736,3 +736,73 @@ def test_wallet_balance_keeps_token_visible_when_sol_rpc_fails(client, monkeypat
         assert response.json()["token_display"] == "25"
     finally:
         settings.gamer_token_mint = old_mint
+
+def test_failed_devnet_claim_can_be_reset(client, monkeypatch):
+    import asyncio
+
+    from sqlalchemy import select
+
+    from app.config import get_settings
+    from app.models import User
+    from app.token_payout import PayoutError
+
+    telegram_id = 555016
+    _earn_one_reward(client, telegram_id)
+    game = game_login(
+        client,
+        user={"id": telegram_id, "first_name": "Reset Player"},
+    ).json()
+    headers = _reward_headers(game)
+    wallet = "11111111111111111111111111111111"
+
+    async def link_wallet():
+        async with SessionMaker() as session:
+            user = await session.scalar(
+                select(User).where(User.telegram_id == telegram_id)
+            )
+            assert user is not None
+            user.wallet_address = wallet
+            await session.commit()
+
+    async def failed_send(**kwargs):
+        raise PayoutError("Reward token mint was not found on devnet.")
+
+    asyncio.run(link_wallet())
+    monkeypatch.setattr("app.api.rewards.send_gamer_tokens", failed_send)
+
+    settings = get_settings()
+    old = (
+        settings.rewards_claims_enabled,
+        settings.gamer_token_mint,
+        settings.gamer_treasury_keypair,
+        settings.reward_rpc_url,
+    )
+    settings.rewards_claims_enabled = True
+    settings.gamer_token_mint = "11111111111111111111111111111111"
+    settings.gamer_treasury_keypair = "test-only"
+    settings.reward_rpc_url = "https://api.devnet.solana.com"
+    try:
+        claimed = client.post("/api/game/rewards/claim", headers=headers)
+        assert claimed.status_code == 200, claimed.text
+        assert claimed.json()["status"] == "pending"
+
+        pending = client.get("/api/game/rewards", headers=headers).json()
+        assert pending["pending_amount"] == 100
+        assert pending["pending_error"] == "Reward token mint was not found on devnet."
+        assert pending["can_reset_pending"] is True
+
+        reset = client.post("/api/game/rewards/claim/reset", headers=headers)
+        assert reset.status_code == 200, reset.text
+        assert reset.json()["restored_amount"] == 100
+
+        restored = client.get("/api/game/rewards", headers=headers).json()
+        assert restored["available_amount"] == 100
+        assert restored["pending_amount"] == 0
+        assert restored["can_reset_pending"] is False
+    finally:
+        (
+            settings.rewards_claims_enabled,
+            settings.gamer_token_mint,
+            settings.gamer_treasury_keypair,
+            settings.reward_rpc_url,
+        ) = old

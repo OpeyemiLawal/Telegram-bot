@@ -13,8 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.game_sessions import GameSession, current_game_session
 from app.api.rewards import (
     ClaimOut,
+    ResetClaimOut,
     RewardSummaryOut,
     claim_for_user,
+    reset_failed_claim_for_user,
     reward_summary_for_user,
 )
 from app.config import Settings, get_settings
@@ -68,6 +70,16 @@ async def game_reward_summary(
 ) -> RewardSummaryOut:
     """Expose only reward state needed by the registered game origin."""
     return await reward_summary_for_user(active.user, session, settings)
+
+
+@router.post("/claim/reset", response_model=ResetClaimOut)
+async def reset_game_claim(
+    active: GameSession = Depends(current_game_session),
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> ResetClaimOut:
+    """Restore this player's failed unsigned devnet claim."""
+    return await reset_failed_claim_for_user(active.user, session, settings)
 
 
 @router.post("/claim", response_model=ClaimOut)

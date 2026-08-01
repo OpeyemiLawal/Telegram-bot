@@ -263,6 +263,7 @@ export interface WalletBalance {
   /** False until the token mint is configured. A truthful zero, not an error. */
   token_configured: boolean;
   token_available: boolean;
+  token_error: string | null;
 }
 
 /**
@@ -284,6 +285,8 @@ export interface RewardSummary {
   claims_enabled: boolean;
   minimum_claim: number;
   can_claim: boolean;
+  pending_error: string | null;
+  can_reset_pending: boolean;
 }
 
 export interface RewardClaim {
@@ -301,5 +304,11 @@ export const getRewardSummary = () => request<RewardSummary>("/rewards");
 
 export const claimGamerTokens = () =>
   request<RewardClaim>("/rewards/claim", { method: "POST" });
+
+export const resetFailedRewardClaim = () =>
+  request<{ restored_amount: number; token_symbol: string; message: string }>(
+    "/rewards/claim/reset",
+    { method: "POST" },
+  );
 export const unlinkWallet = () =>
   request<void>("/wallet", { method: "DELETE" });

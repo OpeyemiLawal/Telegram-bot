@@ -1,6 +1,6 @@
 extends Control
 
-## Tap Rush â€” a small, real game that drives the bridge.
+## Tap Rush Ã¢â‚¬â€ a small, real game that drives the bridge.
 ##
 ## Deliberately a game rather than a diagnostic screen. A row of buttons proves
 ## the messages work in isolation; it does not prove they work while a frame is
@@ -12,7 +12,7 @@ extends Control
 ##
 ##   handshake   once on ready, before anything is drawn
 ##   getPlayer   the name shown in the HUD comes from the shell, not from Godot
-##   haptic      on every hit, so ~50 calls a round â€” a rate a real game reaches
+##   haptic      on every hit, so ~50 calls a round Ã¢â‚¬â€ a rate a real game reaches
 ##   exit        the shell navigates, the game does not
 ##
 ## Notice the callbacks are stored in member variables. A JavaScriptBridge
@@ -26,12 +26,12 @@ extends Control
 ## ---------------------------------------------------------------------------
 ##
 ## Nothing below is a fixed pixel value. The shell sizes its iframe from the
-## player's viewport, and Telegram's is different on every device â€” a tall phone,
+## player's viewport, and Telegram's is different on every device Ã¢â‚¬â€ a tall phone,
 ## a squat desktop window, a tablet in landscape. Sizes are expressed against a
 ## 720x1280 reference and scaled by how much of that reference actually fits, so
 ## the target is always thumb-sized relative to the screen rather than absolutely.
 ##
-## The alternative â€” designing for one size and letting the engine letterbox â€”
+## The alternative Ã¢â‚¬â€ designing for one size and letting the engine letterbox Ã¢â‚¬â€
 ## looks correct in the editor and wrong on hardware.
 
 const REFERENCE := Vector2(720.0, 1280.0)
@@ -57,6 +57,7 @@ var _cb_reward_start: JavaScriptObject
 var _cb_reward_tap: JavaScriptObject
 var _cb_reward_summary: JavaScriptObject
 var _cb_reward_claim: JavaScriptObject
+var _cb_reward_reset: JavaScriptObject
 
 var _playing := false
 var _score := 0
@@ -82,6 +83,8 @@ var _claims_enabled := false
 var _minimum_claim := 100
 var _claim_working := false
 var _claim_state := "loading"
+var _pending_reward := 0
+var _can_reset_pending := false
 
 ## Why the bridge is or is not working, shown on screen.
 ##
@@ -129,7 +132,7 @@ func _ready() -> void:
 
 ## How much of the reference layout fits on this screen.
 ##
-## The smaller of the two ratios, so the design fits in both directions â€” taking
+## The smaller of the two ratios, so the design fits in both directions Ã¢â‚¬â€ taking
 ## the larger would size the target off the bottom of a short window. Clamped
 ## because a very large screen should not produce a circle the size of a dinner
 ## plate, and a very small one should stay tappable.
@@ -202,7 +205,7 @@ func _apply_scale() -> void:
 	_primary.custom_minimum_size = Vector2(0.0, 72.0 * u)
 	_leave_button.custom_minimum_size = Vector2(0.0, 60.0 * u)
 
-	# A resize can leave the current radius outside the new bounds â€” larger than
+	# A resize can leave the current radius outside the new bounds Ã¢â‚¬â€ larger than
 	# a shrunken screen allows, or already below the new miss threshold.
 	_radius = clampf(_radius, _min_radius(), _start_radius())
 
@@ -246,7 +249,7 @@ func _on_handshake(args: Array) -> void:
 	# A JavaScriptObject resolves unknown properties to null via `_get`, so
 	# `info.error` is the supported way to ask. `info.get("error")` routes through
 	# Godot's own Object.get, which is not the same lookup and pushes an error for
-	# a property Godot does not know about â€” enough to abort this handler before
+	# a property Godot does not know about Ã¢â‚¬â€ enough to abort this handler before
 	# it ever requests the player, leaving the HUD reading "player" with nothing
 	# logged to say why.
 	if info == null or info.error != null:
@@ -311,6 +314,8 @@ func _on_reward_summary(args: Array) -> void:
 	_reward_symbol = str(result.tokenSymbol)
 	_claims_enabled = bool(result.claimsEnabled)
 	_minimum_claim = int(result.minimumClaim)
+	_pending_reward = int(result.pendingAmount)
+	_can_reset_pending = bool(result.canResetPending)
 	_claim_state = "ready"
 	_update_hud()
 
@@ -319,7 +324,34 @@ func _on_claim_button() -> void:
 	if _claim_state == "unavailable":
 		_refresh_rewards()
 		return
+	if _can_reset_pending:
+		_reset_failed_claim()
+		return
 	_claim_rewards()
+
+
+func _reset_failed_claim() -> void:
+	if _sdk == null or _claim_working or _sdk.resetFailedRewardClaim == null:
+		return
+	_claim_working = true
+	_claim_state = "resetting"
+	_cb_reward_reset = JavaScriptBridge.create_callback(_on_reward_reset)
+	_sdk.resetFailedRewardClaim(_cb_reward_reset)
+	_update_hud()
+
+
+func _on_reward_reset(args: Array) -> void:
+	_claim_working = false
+	var result = args[0]
+	if result == null or result.error != null:
+		_claim_state = "failed"
+		_buzz("error")
+		_update_hud()
+		return
+	_can_reset_pending = false
+	_pending_reward = 0
+	_buzz("success")
+	_refresh_rewards()
 
 
 func _claim_rewards() -> void:
@@ -348,8 +380,15 @@ func _on_reward_claim(args: Array) -> void:
 		_update_hud()
 		return
 
+	if str(result.status) != "confirmed":
+		_claim_state = "failed"
+		_refresh_rewards()
+		return
+
 	_reward_balance = 0
 	_reward_progress = 0
+	_pending_reward = 0
+	_can_reset_pending = false
 	_claim_state = "claimed"
 	_buzz("success")
 	_update_hud()
@@ -452,8 +491,8 @@ func _end_round(reason: String) -> void:
 	_buzz("error")
 	queue_redraw()
 	_show_banner(
-		"%s â€” %d" % [reason, _score],
-		"Best %d Â· %s" % [_best, _player_name],
+		"%s Ã¢â‚¬â€ %d" % [reason, _score],
+		"Best %d Ã‚Â· %s" % [_best, _player_name],
 		"Play again",
 	)
 
@@ -491,7 +530,7 @@ func _draw() -> void:
 		return
 
 	var centre := _target_position()
-	# A faint ring at full size makes the shrink readable â€” without it the target
+	# A faint ring at full size makes the shrink readable Ã¢â‚¬â€ without it the target
 	# just looks small rather than running out of time.
 	draw_arc(centre, _start_radius(), 0.0, TAU, 48, Color(GOLD, 0.15), 2.0 * _unit())
 	draw_circle(centre, _radius, GOLD)
@@ -643,7 +682,7 @@ func _update_hud() -> void:
 		elif _reward_state == "starting":
 			_reward_label.text = "Rewards: starting..."
 		else:
-			_reward_label.text = "Rewards: %d %s  â€¢  %d/5 taps" % [
+			_reward_label.text = "Rewards: %d %s  Ã¢â‚¬Â¢  %d/5 taps" % [
 				_reward_balance,
 				_reward_symbol,
 				_reward_progress,
@@ -667,6 +706,11 @@ func _update_claim_button() -> void:
 		_claim_button.text = "Connect wallet to claim"
 	elif _claim_state == "loading":
 		_claim_button.text = "Loading rewards..."
+	elif _claim_state == "resetting":
+		_claim_button.text = "Resetting failed claim..."
+	elif _can_reset_pending:
+		_claim_button.text = "Reset failed devnet claim"
+		_claim_button.disabled = _playing
 	elif _claim_state == "unavailable":
 		_claim_button.text = "Retry reward balance"
 		_claim_button.disabled = false
@@ -694,5 +738,5 @@ func _leave() -> void:
 		_sdk.exit()
 	else:
 		# Outside the shell there is nowhere to go, so say so rather than doing
-		# nothing â€” a dead button in a test build wastes an export cycle.
+		# nothing Ã¢â‚¬â€ a dead button in a test build wastes an export cycle.
 		_show_banner("Not in the shell", "Exit only works inside Telegram.", "Start")
