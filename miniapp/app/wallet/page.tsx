@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   useAppKit,
@@ -675,14 +674,9 @@ function ConnectedWalletConnector({
           </>
         )}
 
-        {/* Linking is a means, not an end — the player came here to play. The
-            primary action leads onward; disconnecting is deliberately the quiet
-            one, since it is rare and destructive of a step they just took. */}
+        {/* The linked wallet stays associated until explicitly disconnected. */}
         {stage === "linked" && (
           <>
-            <Link className="button" href="/games" onClick={() => tap()}>
-              Browse games
-            </Link>
             <button
               className="button button--quiet"
               disabled={working}

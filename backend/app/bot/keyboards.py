@@ -17,15 +17,26 @@ def _url(path: str = "") -> WebAppInfo:
 
 
 def main_menu() -> InlineKeyboardMarkup:
-    """The two primary actions shown in the bot chat.
-
-    Admin tools stay protected at their direct Mini App route, but are not
-    advertised in the player-facing menu.
-    """
+    """The two primary actions shown in the bot chat."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🧪 Test", web_app=_url("/games"))],
+            [InlineKeyboardButton(text="🧪 Test", callback_data="show_games")],
             [InlineKeyboardButton(text="🏧 Wallet", web_app=_url("/wallet"))],
+        ]
+    )
+
+
+def games_menu() -> InlineKeyboardMarkup:
+    """Games are selected in chat, then launched directly."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🎮 Tap Rush",
+                    web_app=_url("/play/tap-rush"),
+                )
+            ],
+            [InlineKeyboardButton(text="← Back", callback_data="main_menu")],
         ]
     )
 
@@ -38,4 +49,4 @@ def open_app_button(label: str = "Open", path: str = "") -> InlineKeyboardMarkup
 
 def persistent_menu_button() -> MenuButtonWebApp:
     """Replaces the chat's hamburger menu with a direct launch button."""
-    return MenuButtonWebApp(text="Play", web_app=_url())
+    return MenuButtonWebApp(text="Wallet", web_app=_url("/wallet"))

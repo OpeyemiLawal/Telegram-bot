@@ -9,7 +9,7 @@ from aiogram.types import CallbackQuery, Message
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.bot.keyboards import main_menu, open_app_button
+from app.bot.keyboards import games_menu, main_menu
 from app.bot.menu_sync import remember_menu
 from app.db import SessionMaker
 from app.models import User
@@ -127,15 +127,26 @@ async def handle_wallet(message: Message) -> None:
 
 @router.message(Command("games"))
 async def handle_games(message: Message) -> None:
-    await message.answer(
-        "Everything playable right now.",
-        reply_markup=open_app_button("Open games", "/games"),
-    )
+    await message.answer("Choose a game.", reply_markup=games_menu())
 
 
 @router.message(Command("help"))
 async def handle_help(message: Message) -> None:
     await _reply_with_menu(message, HELP)
+
+
+@router.callback_query(F.data == "show_games")
+async def handle_games_callback(query: CallbackQuery) -> None:
+    if query.message is not None:
+        await query.message.edit_reply_markup(reply_markup=games_menu())
+    await query.answer()
+
+
+@router.callback_query(F.data == "main_menu")
+async def handle_main_menu_callback(query: CallbackQuery) -> None:
+    if query.message is not None:
+        await query.message.edit_reply_markup(reply_markup=main_menu())
+    await query.answer()
 
 
 @router.callback_query(F.data == "help")

@@ -7,7 +7,7 @@ import { Screen } from "@/components/Screen";
 import { getGame, type Game } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { attachGameBridge } from "@/lib/game-bridge";
-import { enterFullscreen, tap } from "@/lib/telegram";
+import { enterFullscreen, tap, webApp } from "@/lib/telegram";
 
 /**
  * Hosts one game, full-bleed, and connects it to the shell.
@@ -33,7 +33,12 @@ export default function PlayPage() {
 
   const exit = useCallback(() => {
     tap();
-    router.push("/games");
+    const app = webApp();
+    if (app) {
+      app.close();
+      return;
+    }
+    router.push("/");
   }, [router]);
 
   useEffect(() => {
@@ -75,7 +80,7 @@ export default function PlayPage() {
             <div className="state">
               <h1 className="heading">{error}</h1>
               <button className="button" onClick={exit}>
-                Back to games
+                Back to bot
               </button>
             </div>
           ) : (
