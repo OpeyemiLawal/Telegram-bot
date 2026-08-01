@@ -604,7 +604,7 @@ function ConnectedWalletConnector({
   const desktop = telegramSurface() === "desktop";
 
   return (
-    <div className="wallet-panel">
+    <div className="wallet-panel" data-stage={stage}>
       {!(desktop && stage === "choose") && <Steps stage={stage} />}
 
       <span className="eyebrow">{COPY[stage].eyebrow}</span>
@@ -777,35 +777,51 @@ function RewardsPanel({ user }: { user: Me }) {
   const available = summary?.available_amount ?? 0;
 
   return (
-    <section className="wallet-panel" aria-label="Game rewards">
-      <span className="eyebrow">Game rewards</span>
-      <p className="wallet-panel__address">
-        {available.toLocaleString()} {symbol}
-      </p>
-      <p className="body">Every 5 accepted Tap Rush taps earns 100 {symbol}.</p>
+    <section
+      className="wallet-panel reward-panel"
+      aria-label="Game rewards"
+    >
+      <div className="wallet-panel__header">
+        <span>
+          <span className="eyebrow">Game rewards</span>
+          <strong className="wallet-panel__title">Available to claim</strong>
+        </span>
+        <span className="badge">ON-CHAIN</span>
+      </div>
 
-      {summary && summary.pending_amount > 0 && (
-        <p className="body">
-          Pending transfer: {summary.pending_amount.toLocaleString()} {symbol}
-        </p>
-      )}
+      <p className="reward-panel__balance">
+        {available.toLocaleString()}{" "}
+        <span className="reward-panel__symbol">{symbol}</span>
+      </p>
+
+      <div className="reward-panel__meta">
+        <span className="reward-panel__pill">5 taps = 100 {symbol}</span>
+        {summary && summary.pending_amount > 0 && (
+          <span className="reward-panel__pill reward-panel__pill--pending">
+            {summary.pending_amount.toLocaleString()} pending
+          </span>
+        )}
+      </div>
+
+      <p className="body reward-panel__rule">
+        Rewards earned in Tap Rush can be sent directly to your linked wallet.
+      </p>
 
       {summary?.pending_error && (
         <p className="wallet-panel__error">{summary.pending_error}</p>
       )}
 
       {!user.wallet_address && (
-        <p className="body">Connect a wallet before claiming.</p>
+        <p className="wallet-panel__error">Connect a wallet before claiming.</p>
       )}
 
       {summary && !summary.claims_enabled && (
-        <p className="body">
-          Earning is active. On-chain claims unlock after the devnet reward
-          treasury is configured.
+        <p className="wallet-panel__error">
+          On-chain claims are currently unavailable.
         </p>
       )}
 
-      {claim && <p className="body">{claim.message}</p>}
+      {claim && <p className="body" style={{ marginTop: 11 }}>{claim.message}</p>}
       {error && <p className="wallet-panel__error">{error}</p>}
 
       <div className="wallet-panel__actions">
@@ -815,7 +831,7 @@ function RewardsPanel({ user }: { user: Me }) {
             disabled={working}
             onClick={() => void resetPending()}
           >
-            {working ? "Resetting..." : "Reset failed devnet claim"}
+            {working ? "Resetting..." : "Reset failed claim"}
           </button>
         )}
         <button
@@ -823,14 +839,14 @@ function RewardsPanel({ user }: { user: Me }) {
           disabled={working || !summary?.can_claim}
           onClick={() => void claimAll()}
         >
-          {working ? "Sending..." : "Claim to linked wallet"}
+          {working ? "Sending..." : "Claim rewards"}
         </button>
         {claim?.explorer_url && (
           <button
             className="button button--quiet"
             onClick={() => openExternal(claim.explorer_url!)}
           >
-            View on Solana
+            View transaction
           </button>
         )}
       </div>
@@ -887,38 +903,27 @@ export default function WalletPage() {
     <Screen onBack={() => router.push("/")}>
       {(user) => (
         <>
-          <span className="eyebrow">Section 01</span>
-          <h1 className="display" style={{ margin: "8px 0 24px" }}>
-            Wallet
-          </h1>
+          <header className="page-header">
+            <span className="eyebrow">Account</span>
+            <h1 className="display">Wallet</h1>
+            <p className="body">
+              Your balances, linked wallet, and game rewards in one place.
+            </p>
+          </header>
 
           <PlayerCard user={user} />
           <WalletConnector user={user} updateUser={updateUser} />
           <RewardsPanel user={user} />
 
-          <div className="stack">
-            <button className="tile" disabled>
-              <span className="tile__body">
-                <span className="heading">Deposit</span>
-                <p className="body">Address and QR are added in the next step.</p>
-              </span>
-              <span className="badge">Next</span>
-            </button>
-
-            <button className="tile" disabled>
-              <span className="tile__body">
-                <span className="heading">Withdraw</span>
-                <p className="body">Every transfer will require wallet approval.</p>
-              </span>
-              <span className="badge">Next</span>
-            </button>
-          </div>
-
           <div className="notice">
-            <p className="body">
-              Solana Games stores only your public address. Never send a seed
-              phrase or private key to this bot.
-            </p>
+            <span className="notice__icon" aria-hidden>✓</span>
+            <span className="notice__body">
+              <strong className="heading">Your keys stay private</strong>
+              <p className="body">
+                Solana Games stores only your public address. Never share a seed
+                phrase or private key with any bot.
+              </p>
+            </span>
           </div>
         </>
       )}

@@ -131,14 +131,13 @@ export default function AdminPage() {
 
         return (
           <>
-            <span className="eyebrow">Admin</span>
-            <h1 className="display" style={{ margin: "8px 0 6px" }}>
-              Catalogue
-            </h1>
-            <p className="body" style={{ marginBottom: 20 }}>
-              Changes are live immediately. Game origins reach the security policy
-              within a minute.
-            </p>
+            <header className="page-header">
+              <span className="eyebrow">Admin</span>
+              <h1 className="display">Catalogue</h1>
+              <p className="body">
+                Manage published games and their trusted origins.
+              </p>
+            </header>
 
             {error && <p className="wallet-panel__error">{error}</p>}
 
@@ -242,7 +241,7 @@ function GameRow({
           <button className="button button--quiet" disabled={busy} onClick={onToggle}>
             {game.status === "hidden" ? "Show" : "Hide"}
           </button>
-          <button className="button button--quiet" disabled={busy} onClick={onDelete}>
+          <button className="button button--danger" disabled={busy} onClick={onDelete}>
             Delete
           </button>
         </div>

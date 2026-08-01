@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getWalletBalance, type Me, type WalletBalance } from "@/lib/api";
 
 function truncate(address: string): string {
-  return address.slice(0, 4) + "…" + address.slice(-4);
+  return address.slice(0, 6) + "..." + address.slice(-6);
 }
 
 export function PlayerCard({ user }: { user: Me }) {
@@ -37,31 +37,74 @@ export function PlayerCard({ user }: { user: Me }) {
   return (
     <section className="card" aria-label="Player wallet">
       <div className="card__face">
-        <div className="card__identity">
-          <span className="card__avatar" aria-hidden>
-            {name.slice(0, 1).toUpperCase()}
-          </span>
-          <span>
-            <strong className="card__name">{name}</strong>
-            <span className="card__status">
-              {connected ? "Wallet connected" : "Wallet not connected"}
+        <div className="card__topline">
+          <div className="card__identity">
+            <span className="card__avatar" aria-hidden={!user.photo_url}>
+              {user.photo_url ? (
+                <img src={user.photo_url} alt="" />
+              ) : (
+                name.slice(0, 1).toUpperCase()
+              )}
             </span>
-          </span>
+            <span style={{ minWidth: 0 }}>
+              <strong className="card__name">{name}</strong>
+              <span
+                className={
+                  connected
+                    ? "card__status card__status--connected"
+                    : "card__status"
+                }
+              >
+                <span className="card__status-dot" aria-hidden />
+                {connected ? "Wallet connected" : "Wallet not connected"}
+              </span>
+            </span>
+          </div>
+          <span className="card__network">SOLANA</span>
         </div>
 
         <div className="card__address">
-          {connected ? truncate(user.wallet_address!) : "Connect a wallet to view balances"}
+          <span className="card__address-label">Address</span>
+          <span className="card__address-value">
+            {connected
+              ? truncate(user.wallet_address!)
+              : "Connect a wallet to continue"}
+          </span>
         </div>
 
         <div className="card__balances">
-          <div>
-            <span className={connected && !solFailed ? "card__amount" : "card__amount card__amount--idle"}>
+          <div className="card__balance">
+            <span className="card__balance-label">
+              <span className="card__balance-dot" aria-hidden />
+              Solana
+            </span>
+            <span
+              className={
+                connected && !solFailed
+                  ? "card__amount"
+                  : "card__amount card__amount--idle"
+              }
+            >
               {sol}
             </span>
             <span className="card__denom">SOL</span>
           </div>
-          <div>
-            <span className={connected && !tokenFailed ? "card__amount" : "card__amount card__amount--idle"}>
+
+          <div className="card__balance">
+            <span className="card__balance-label">
+              <span
+                className="card__balance-dot card__balance-dot--reward"
+                aria-hidden
+              />
+              Gamer
+            </span>
+            <span
+              className={
+                connected && !tokenFailed
+                  ? "card__amount"
+                  : "card__amount card__amount--idle"
+              }
+            >
               {token}
             </span>
             <span className="card__denom">{symbol}</span>
@@ -69,15 +112,13 @@ export function PlayerCard({ user }: { user: Me }) {
         </div>
 
         {tokenFailed && balance?.token_error && (
-          <p className="body" style={{ marginTop: 10 }}>
-            {balance.token_error}
-          </p>
+          <p className="wallet-panel__error">{balance.token_error}</p>
         )}
 
         {connected && (solFailed || tokenFailed) && (
           <button
             className="button button--quiet"
-            style={{ marginTop: 12 }}
+            style={{ width: "100%", marginTop: 12 }}
             onClick={() => void load()}
           >
             Retry balances

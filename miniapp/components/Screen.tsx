@@ -9,11 +9,25 @@ import type { Me } from "@/lib/api";
 export function Masthead() {
   return (
     <header className="masthead">
-      <div className="masthead__mark">
-        Solana<span>·</span>Games
+      <div className="masthead__brand">
+        <span className="masthead__logo" aria-hidden>
+          SG
+        </span>
+        <span className="masthead__copy">
+          <strong className="masthead__mark">Solana Games</strong>
+          <span className="masthead__caption">Wallet and rewards</span>
+        </span>
       </div>
-      <span className="masthead__caption">Mini App</span>
+      <span className="masthead__status">Secure</span>
     </header>
+  );
+}
+
+function StateIcon({ children }: { children: ReactNode }) {
+  return (
+    <span className="state__icon" aria-hidden>
+      {children}
+    </span>
   );
 }
 
@@ -39,10 +53,10 @@ export function Screen({
     return (
       <main className="app-shell">
         <Masthead />
-        <div className="skeleton" style={{ height: 168 }} />
+        <div className="skeleton" style={{ height: 194 }} />
         <div className="stack">
-          <div className="skeleton" style={{ height: 74 }} />
-          <div className="skeleton" style={{ height: 74 }} />
+          <div className="skeleton" style={{ height: 76 }} />
+          <div className="skeleton" style={{ height: 76 }} />
         </div>
       </main>
     );
@@ -53,13 +67,14 @@ export function Screen({
       <main className="app-shell">
         <Masthead />
         <div className="state">
+          <StateIcon>↗</StateIcon>
           <h1 className="heading">Open this from Telegram</h1>
           <p className="body">
-            This app verifies who you are using the launch signature Telegram
-            provides. In a plain browser tab there is nothing to verify.
+            Launch the Mini App from the bot so Telegram can securely verify
+            your account.
           </p>
           <a className="button" href="https://t.me">
-            Go to the bot
+            Open Telegram
           </a>
         </div>
       </main>
@@ -71,6 +86,7 @@ export function Screen({
       <main className="app-shell">
         <Masthead />
         <div className="state">
+          <StateIcon>!</StateIcon>
           <h1 className="heading">Sign-in did not complete</h1>
           <p className="body">{error ?? "The server did not respond."}</p>
           <button className="button" onClick={retry}>
