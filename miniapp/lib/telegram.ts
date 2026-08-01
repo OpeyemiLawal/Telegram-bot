@@ -143,10 +143,17 @@ export function optimisticProfile() {
   };
 }
 
-/** Call once on mount. Claims the viewport and paints our own chrome. */
-export function primeViewport(background: string, header: string): void {
+/** Call once on mount. Claims the viewport and uses Telegram's active theme. */
+export function primeViewport(): void {
   const app = webApp();
   if (!app) return;
+
+  const theme = window.getComputedStyle(document.documentElement);
+  const background =
+    theme.getPropertyValue("--tg-theme-bg-color").trim() || "#ffffff";
+  const header =
+    theme.getPropertyValue("--tg-theme-header-bg-color").trim() || background;
+
   app.ready();
   app.expand();
   app.setBackgroundColor(background);

@@ -10,18 +10,13 @@ export function Masthead() {
   return (
     <header className="masthead">
       <div className="masthead__mark">
-        SOLANA<span>·</span>GAMES
+        Solana<span>·</span>Games
       </div>
-      <span className="eyebrow">Telegram</span>
+      <span className="masthead__caption">Mini App</span>
     </header>
   );
 }
 
-/**
- * Gates every route behind a verified session and paints the three states
- * that are not "it worked". Each one says what happened and what to do —
- * no spinners without explanation, no apologies.
- */
 export function Screen({
   onBack,
   children,
@@ -32,7 +27,7 @@ export function Screen({
   const { status, user, error, retry } = useAuth();
 
   useEffect(() => {
-    primeViewport("#0b1620", "#0b1620");
+    primeViewport();
   }, []);
 
   useEffect(() => {
@@ -42,20 +37,20 @@ export function Screen({
 
   if (status === "booting") {
     return (
-      <>
+      <main className="app-shell">
         <Masthead />
         <div className="skeleton" style={{ height: 168 }} />
         <div className="stack">
           <div className="skeleton" style={{ height: 74 }} />
           <div className="skeleton" style={{ height: 74 }} />
         </div>
-      </>
+      </main>
     );
   }
 
   if (status === "outside") {
     return (
-      <>
+      <main className="app-shell">
         <Masthead />
         <div className="state">
           <h1 className="heading">Open this from Telegram</h1>
@@ -67,13 +62,13 @@ export function Screen({
             Go to the bot
           </a>
         </div>
-      </>
+      </main>
     );
   }
 
   if (status === "failed" || !user) {
     return (
-      <>
+      <main className="app-shell">
         <Masthead />
         <div className="state">
           <h1 className="heading">Sign-in did not complete</h1>
@@ -82,14 +77,14 @@ export function Screen({
             Try again
           </button>
         </div>
-      </>
+      </main>
     );
   }
 
   return (
-    <>
+    <main className="app-shell">
       <Masthead />
       {children(user)}
-    </>
+    </main>
   );
 }

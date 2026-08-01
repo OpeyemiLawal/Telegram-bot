@@ -97,7 +97,7 @@ function Stage({ game, onExit }: { game: Game | null; onExit: () => void }) {
       style={{
         position: "fixed",
         inset: 0,
-        background: "#0b1620",
+        background: "var(--tg-theme-bg-color, #ffffff)",
         zIndex: 40,
         overflow: "hidden",
       }}
@@ -121,10 +121,10 @@ function Stage({ game, onExit }: { game: Game | null; onExit: () => void }) {
           width: 38,
           height: 38,
           borderRadius: 19,
-          border: "1px solid rgba(232,238,244,0.22)",
-          background: "rgba(11,22,32,0.62)",
+          border: "1px solid var(--tg-theme-hint-color, rgba(0,0,0,0.18))",
+          background: "var(--tg-theme-secondary-bg-color, rgba(255,255,255,0.86))",
           backdropFilter: "blur(6px)",
-          color: "#e8eef4",
+          color: "var(--tg-theme-text-color, #11181f)",
           fontSize: 18,
           lineHeight: 1,
           cursor: "pointer",
@@ -144,7 +144,7 @@ function Loading() {
         inset: 0,
         display: "grid",
         placeItems: "center",
-        color: "#93a8ba",
+        color: "var(--tg-theme-hint-color, #707579)",
         fontSize: 14,
       }}
     >
@@ -231,7 +231,7 @@ function GameFrame({ game, onExit }: { game: Game; onExit: () => void }) {
           height: "100%",
           border: 0,
           display: "block",
-          background: "#0b1620",
+          background: "var(--tg-theme-bg-color, #ffffff)",
         }}
       />
     </>

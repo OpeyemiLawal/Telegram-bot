@@ -1,379 +1,329 @@
-@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@400;500;700&display=swap");
-
-/*
-  Palette: an arcade token, not a trading terminal.
-  Petrol-ink ground so it reads as a cabinet interior rather than a void,
-  brass as the only warm accent (the coin), mint reserved exclusively for
-  numbers that represent money the player has.
-*/
 :root {
-  --ink: #0b1620;
-  --ink-raised: #12212d;
-  --ink-sunk: #081018;
-  --rule: #1b2e3c;
-
-  --brass: #c89b3c;
-  --brass-deep: #8a6b26;
-  --mint: #7fd4b0;
-  --alert: #e0674f;
-
-  --bone: #e8e4da;
-  --slate: #7a8c99;
-
-  --display: "Bricolage Grotesque", system-ui, sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, monospace;
-  --body: system-ui, -apple-system, "Segoe UI", sans-serif;
-
-  --gap: 16px;
-  --radius: 14px;
+  color-scheme: light dark;
+  --tg-bg: var(--tg-theme-bg-color, #ffffff);
+  --tg-surface: var(--tg-theme-secondary-bg-color, #f4f4f5);
+  --tg-section: var(--tg-theme-section-bg-color, #ffffff);
+  --tg-text: var(--tg-theme-text-color, #11181f);
+  --tg-subtitle: var(--tg-theme-subtitle-text-color, #707579);
+  --tg-hint: var(--tg-theme-hint-color, #8e8e93);
+  --tg-link: var(--tg-theme-link-color, #3390ec);
+  --tg-button: var(--tg-theme-button-color, #3390ec);
+  --tg-button-text: var(--tg-theme-button-text-color, #ffffff);
+  --tg-section-title: var(--tg-theme-section-header-text-color, #3390ec);
+  --tg-destructive: var(--tg-theme-destructive-text-color, #e53935);
+  --tg-separator: color-mix(in srgb, var(--tg-hint) 24%, transparent);
+  --radius: 12px;
+  --page-pad: 16px;
 }
 
-* {
-  box-sizing: border-box;
+* { box-sizing: border-box; }
+html, body {
+  min-height: 100%;
   margin: 0;
-  padding: 0;
-}
-
-html,
-body {
-  background: var(--ink);
-  color: var(--bone);
-  font-family: var(--body);
+  background: var(--tg-bg);
+  color: var(--tg-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
 }
+body { min-height: 100dvh; }
+button, input, select, textarea { font: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+a { color: inherit; }
 
-body {
+.app-shell {
+  width: min(100%, 680px);
   min-height: 100dvh;
-  padding: 0 var(--gap) 40px;
-  max-width: 560px;
-  margin-inline: auto;
+  margin: 0 auto;
+  padding: 0 var(--page-pad) max(28px, env(safe-area-inset-bottom));
 }
-
-/* ---------- type ---------- */
 
 .eyebrow {
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--slate);
-}
-
-.display {
-  font-family: var(--display);
-  font-weight: 800;
-  font-size: clamp(28px, 9vw, 40px);
-  line-height: 0.95;
-  letter-spacing: -0.03em;
-}
-
-.heading {
-  font-family: var(--display);
+  display: block;
+  color: var(--tg-section-title);
+  font-size: 13px;
   font-weight: 600;
-  font-size: 19px;
-  letter-spacing: -0.015em;
+  line-height: 18px;
 }
-
+.display {
+  margin: 4px 0 10px;
+  color: var(--tg-text);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.17;
+}
+.heading {
+  color: var(--tg-text);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 22px;
+}
 .body {
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--slate);
+  color: var(--tg-subtitle);
+  font-size: 15px;
+  line-height: 20px;
 }
-
 .mono {
-  font-family: var(--mono);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-variant-ligatures: none;
 }
 
-/* ---------- shell chrome ---------- */
-
+/* Telegram owns the native top bar; this is the compact in-app page title. */
 .masthead {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  padding: 22px 0 18px;
-  border-bottom: 1px solid var(--rule);
-  margin-bottom: 24px;
-}
-
-.masthead__mark {
-  font-family: var(--display);
-  font-weight: 800;
-  font-size: 15px;
-  letter-spacing: 0.02em;
-}
-
-.masthead__mark span {
-  color: var(--brass);
-}
-
-/* ---------- signature: the player card ---------- */
-/*
-  One object the player carries between every cabinet. The brass edge is a
-  slow sweep, not a pulse — it should feel like light moving across metal.
-*/
-.card {
-  position: relative;
-  border-radius: var(--radius);
-  padding: 1px; /* the foil edge */
-  background: linear-gradient(
-    115deg,
-    var(--brass-deep) 0%,
-    var(--brass) 18%,
-    #f2dda4 26%,
-    var(--brass) 34%,
-    var(--brass-deep) 55%,
-    var(--brass-deep) 100%
-  );
-  background-size: 300% 100%;
-  animation: foil 9s linear infinite;
-}
-
-@keyframes foil {
-  to {
-    background-position: -300% 0;
-  }
-}
-
-.card__face {
-  border-radius: calc(var(--radius) - 1px);
-  background: var(--ink-raised);
-  padding: 20px 18px 18px;
-}
-
-.card__label {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 14px;
+  justify-content: space-between;
+  min-height: 56px;
+  padding: max(4px, env(safe-area-inset-top)) 0 4px;
+}
+.masthead__mark {
+  color: var(--tg-text);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+.masthead__mark span { color: var(--tg-link); }
+.masthead__caption {
+  color: var(--tg-hint);
+  font-size: 14px;
+  line-height: 20px;
 }
 
-.card__address {
-  font-family: var(--mono);
+/* Telegram section card for player and balances. */
+.card {
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--tg-section);
+}
+.card__face { padding: 16px; }
+.card__identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.card__avatar {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--tg-link) 15%, var(--tg-surface));
+  color: var(--tg-link);
+  font-size: 17px;
+  font-weight: 700;
+}
+.card__name {
+  display: block;
+  color: var(--tg-text);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 20px;
+}
+.card__status {
+  display: block;
+  margin-top: 1px;
+  color: var(--tg-hint);
   font-size: 13px;
-  letter-spacing: 0.04em;
-  color: var(--bone);
-  word-break: break-all;
+  line-height: 18px;
 }
-
+.card__address {
+  margin-top: 14px;
+  color: var(--tg-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 14px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
 .card__balances {
   display: flex;
-  gap: 28px;
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid var(--rule);
+  gap: 0;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--tg-separator);
 }
-
+.card__balances > div { flex: 1; }
+.card__balances > div + div {
+  padding-left: 16px;
+  border-left: 1px solid var(--tg-separator);
+}
 .card__amount {
-  font-family: var(--mono);
-  font-weight: 700;
-  font-size: 22px;
-  line-height: 1;
-  color: var(--mint);
+  display: block;
+  color: var(--tg-text);
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 26px;
   font-variant-numeric: tabular-nums;
 }
-
-.card__amount--idle {
-  color: var(--slate);
-}
-
+.card__amount--idle { color: var(--tg-hint); }
 .card__denom {
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.16em;
-  color: var(--slate);
   display: block;
-  margin-top: 7px;
+  margin-top: 2px;
+  color: var(--tg-hint);
+  font-size: 13px;
+  line-height: 18px;
 }
 
-/* ---------- lists and tiles ---------- */
-
+/* Telegram-style grouped action cards. */
 .stack {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin-top: 28px;
+  margin-top: 16px;
 }
-
 .tile {
   display: flex;
+  width: 100%;
   align-items: center;
   gap: 14px;
-  width: 100%;
-  text-align: left;
-  background: var(--ink-raised);
-  border: 1px solid var(--rule);
+  min-height: 72px;
+  padding: 14px 16px;
+  border: 0;
   border-radius: var(--radius);
-  padding: 18px;
-  color: inherit;
-  font: inherit;
+  background: var(--tg-section);
+  color: var(--tg-text);
   cursor: pointer;
+  text-align: left;
   text-decoration: none;
-  transition:
-    border-color 140ms ease,
-    transform 140ms ease;
+  transition: opacity 120ms ease, transform 120ms ease;
 }
-
 .tile:active {
-  transform: scale(0.985);
+  opacity: 0.72;
+  transform: scale(0.99);
 }
-
-.tile:hover:not(:disabled) {
-  border-color: var(--brass-deep);
-}
-
 .tile:disabled {
   cursor: default;
   opacity: 0.55;
 }
-
 .tile__body {
-  flex: 1;
   min-width: 0;
+  flex: 1;
 }
-
 .tile__chevron {
-  color: var(--brass);
-  font-size: 18px;
-  flex-shrink: 0;
+  flex: 0 0 auto;
+  color: var(--tg-hint);
+  font-size: 24px;
+  font-weight: 300;
+  line-height: 1;
 }
-
 .tile__pip {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
   border-radius: 50%;
-  flex-shrink: 0;
 }
-
 .badge {
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--slate);
-  border: 1px solid var(--rule);
+  flex: 0 0 auto;
+  padding: 3px 8px;
   border-radius: 999px;
-  padding: 4px 8px;
+  background: color-mix(in srgb, var(--tg-link) 12%, var(--tg-surface));
+  color: var(--tg-link);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
 }
-
-/* ---------- states ---------- */
 
 .state {
-  padding: 72px 8px;
+  padding: 72px 20px;
   text-align: center;
 }
-
-.state .heading {
-  margin-bottom: 10px;
-}
-
+.state .heading { margin-bottom: 8px; }
 .state .body {
   max-width: 34ch;
-  margin-inline: auto;
+  margin: 0 auto;
 }
-
 .button {
-  font-family: var(--display);
-  font-weight: 600;
-  font-size: 15px;
-  background: var(--brass);
-  color: var(--ink-sunk);
-  border: none;
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 18px;
+  border: 0;
   border-radius: 10px;
-  padding: 13px 22px;
-  margin-top: 22px;
+  background: var(--tg-button);
+  color: var(--tg-button-text);
   cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 20px;
+  text-decoration: none;
+  transition: opacity 120ms ease, transform 120ms ease;
 }
-
+.button:active:not(:disabled) {
+  opacity: 0.76;
+  transform: scale(0.98);
+}
+.button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
 .button--quiet {
-  background: transparent;
-  color: var(--slate);
-  border: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--tg-link) 12%, var(--tg-section));
+  color: var(--tg-link);
 }
-
 .notice {
-  border-left: 2px solid var(--brass-deep);
-  padding: 2px 0 2px 14px;
-  margin-top: 26px;
-}
-
-.skeleton {
-  background: var(--ink-raised);
+  margin-top: 18px;
+  padding: 14px 16px;
   border-radius: var(--radius);
-  animation: breathe 1.4s ease-in-out infinite;
+  background: var(--tg-section);
 }
-
-@keyframes breathe {
-  50% {
-    opacity: 0.45;
-  }
+.notice .heading { font-size: 16px; }
+.skeleton {
+  border-radius: var(--radius);
+  background: linear-gradient(90deg, var(--tg-section), var(--tg-surface), var(--tg-section));
+  background-size: 200% 100%;
+  animation: shimmer 1.35s ease-in-out infinite;
 }
+@keyframes shimmer { to { background-position: -200% 0; } }
 
+.wallet-panel {
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--tg-section);
+}
+.wallet-panel__address {
+  margin: 8px 0;
+  color: var(--tg-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 16px;
+  line-height: 22px;
+  overflow-wrap: anywhere;
+}
+.wallet-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+.wallet-panel__error {
+  margin-top: 12px;
+  color: var(--tg-destructive);
+  font-size: 14px;
+  line-height: 20px;
+}
+.admin-input {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 9px;
+  outline: 1px solid var(--tg-separator);
+  background: var(--tg-surface);
+  color: var(--tg-text);
+  font-size: 15px;
+  line-height: 20px;
+}
+.admin-input:focus { outline: 2px solid var(--tg-link); }
 :focus-visible {
-  outline: 2px solid var(--brass);
+  outline: 2px solid var(--tg-link);
   outline-offset: 2px;
 }
-
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;
     transition: none !important;
   }
-}
-
-/* ---------- external wallet connection ---------- */
-
-.wallet-panel {
-  margin-top: 18px;
-  padding: 18px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  background: var(--ink-raised);
-}
-
-.wallet-panel__address {
-  margin: 9px 0 8px;
-  font-family: var(--mono);
-  font-size: 16px;
-  color: var(--bone);
-  overflow-wrap: anywhere;
-}
-
-.wallet-panel__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 18px;
-}
-
-.wallet-panel__actions .button {
-  margin-top: 0;
-}
-
-.wallet-panel__error {
-  margin-top: 12px;
-  color: var(--alert);
-  font-size: 13px;
-  line-height: 1.4;
-}
-
-/* Admin form controls.
-   Kept minimal and inheriting the app's palette rather than styled per field —
-   this screen is a tool for one person, and every rule here is a rule to
-   maintain against a design system it does not belong to. */
-.admin-input {
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: 9px;
-  border: 1px solid var(--line, #23384a);
-  background: var(--panel, #12212e);
-  color: inherit;
-  font: inherit;
-  font-size: 15px;
-}
-.admin-input:focus {
-  outline: none;
-  border-color: var(--gold, #c89b3c);
 }
