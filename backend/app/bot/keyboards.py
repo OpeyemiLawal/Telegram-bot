@@ -16,46 +16,18 @@ def _url(path: str = "") -> WebAppInfo:
     return WebAppInfo(url=f"{_settings.miniapp_url}{path}")
 
 
-def main_menu(
-    *, has_wallet: bool = False, is_admin: bool = False
-) -> InlineKeyboardMarkup:
-    """The bot's whole surface area.
+def main_menu() -> InlineKeyboardMarkup:
+    """The two primary actions shown in the bot chat.
 
-    web_app buttons only work in private chats — that is fine, and it is also
-    a feature: it keeps wallet entry points out of groups.
-
-    `has_wallet` changes the first button from an instruction into a
-    destination. "Wallet" reads as unfinished setup to someone who has already
-    linked one, and the label is the only signal the chat can carry — the bot
-    cannot see inside the Mini App.
-
-    `is_admin` adds the catalogue button. It is the only way in: a Mini App has
-    no address bar, so a route nobody links to is a route nobody can reach. The
-    button is a convenience and not a control — every admin endpoint checks the
-    caller's Telegram id server-side, so showing it to the wrong person would
-    cost them a "Not found" and nothing else.
+    Admin tools stay protected at their direct Mini App route, but are not
+    advertised in the player-facing menu.
     """
-    rows = [
-        [
-            InlineKeyboardButton(
-                text="View wallet" if has_wallet else "Connect wallet",
-                web_app=_url("/wallet"),
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="How it works",
-                callback_data="help",
-            )
-        ],
-    ]
-
-    if is_admin:
-        rows.append(
-            [InlineKeyboardButton(text="⚙︎ Catalogue", web_app=_url("/admin"))]
-        )
-
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🧪 Test", web_app=_url("/games"))],
+            [InlineKeyboardButton(text="🏧 Wallet", web_app=_url("/wallet"))],
+        ]
+    )
 
 
 def open_app_button(label: str = "Open", path: str = "") -> InlineKeyboardMarkup:

@@ -70,31 +70,16 @@ async def remember_menu(
 async def refresh_menu(
     session: AsyncSession, *, user_id: uuid.UUID, has_wallet: bool
 ) -> None:
-    """Redraw the stored menu if it no longer matches reality.
+    """Keep wallet-state bookkeeping current.
 
-    Skips the call when the keyboard already shows the right thing. Telegram
-    rejects an edit that would produce an identical message, so checking first
-    turns a routine no-op from an exception into nothing at all.
+    The visible menu is now static, so editing its Telegram message on a wallet
+    change would be an identical-keyboard API call that Telegram rejects.
     """
     record = await session.scalar(
         select(BotMenuMessage).where(BotMenuMessage.user_id == user_id)
     )
-    if record is None or record.shows_wallet_linked == has_wallet:
-        return
-
-    try:
-        await _bot().edit_message_reply_markup(
-            chat_id=record.chat_id,
-            message_id=record.message_id,
-            reply_markup=main_menu(has_wallet=has_wallet),
-        )
-    except TelegramAPIError as exc:
-        # The user deleted the message, cleared the chat, or blocked the bot.
-        # None of that should surface as a failed wallet link.
-        logger.info("Could not refresh menu for %s: %s", user_id, exc)
-        return
-
-    record.shows_wallet_linked = has_wallet
+    if record is not None:
+        record.shows_wallet_linked = has_wallet
 
 
 async def announce(chat_id: int, text: str) -> None:
