@@ -96,7 +96,7 @@ export function PlayerCard({ user }: { user: Me }) {
                 className="card__balance-dot card__balance-dot--reward"
                 aria-hidden
               />
-              SGA
+              SGA Token
             </span>
             <span
               className={

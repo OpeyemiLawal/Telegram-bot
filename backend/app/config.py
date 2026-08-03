@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     # placeholder address — which would read some stranger's token — or a screen
     # that cannot render.
     gamer_token_mint: str = Field(default="", alias="GAMER_TOKEN_MINT")
-    gamer_token_symbol: str = Field(default="$Gamer", alias="GAMER_TOKEN_SYMBOL")
+    gamer_token_symbol: str = Field(default="SGA", alias="GAMER_TOKEN_SYMBOL")
 
     # Reward claims are opt-in because enabling them gives this service authority
     # over a funded treasury token account. Start on devnet and use a dedicated

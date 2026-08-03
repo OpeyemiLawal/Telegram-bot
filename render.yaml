@@ -106,7 +106,7 @@ services:
       - key: REWARD_RPC_URL
         value: https://api.devnet.solana.com
       - key: GAMER_TOKEN_SYMBOL
-        value: $Gamer
+        value: SGA
       - key: GAMER_TOKEN_MINT
         sync: false
       - key: GAMER_TREASURY_KEYPAIR

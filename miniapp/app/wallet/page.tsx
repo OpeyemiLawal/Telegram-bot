@@ -256,7 +256,7 @@ function DesktopRoutes() {
         <span className="desktop-routes__icon" aria-hidden="true">↗</span>
         <div>
           <h2 id="desktop-routes-title" className="desktop-routes__title">
-            Choose other SGA play-to-earn options
+            Choose options below
           </h2>
           <p className="desktop-routes__intro">
             Telegram Desktop cannot connect directly to Solana wallets. Visit a browswer, then download a Phantom, Solflare, or Backback extension. 
@@ -639,7 +639,7 @@ function ConnectedWalletConnector({
           ? shortAddress(user.wallet_address)
           : address
             ? shortAddress(address)
-            : "SGA play-to-earn options"}
+            : null}
       </p>
 
       {COPY[stage].body && <p className="body">{COPY[stage].body}</p>}
@@ -817,7 +817,7 @@ function RewardsPanel({ user }: { user: Me }) {
       </p>
 
       <div className="reward-panel__meta">
-        <span className="reward-panel__pill">5 taps = 100 {symbol}</span>
+        <span className="reward-panel__pill">X LEVELS = Y SGA</span>
         {summary && summary.pending_amount > 0 && (
           <span className="reward-panel__pill reward-panel__pill--pending">
             {summary.pending_amount.toLocaleString()} pending
@@ -929,7 +929,7 @@ export default function WalletPage() {
             <span className="eyebrow">Account</span>
             <h1 className="display">Wallet</h1>
             <p className="body">
-              Your secure SGA and SOL play-to-earn, on-demand wallet.
+              The official play-to-earn bot for t.me/sgatoken on Solana, featuring multiple on-demand games with SGA and SOL rewards.
             </p>
           </header>
 
@@ -943,7 +943,7 @@ export default function WalletPage() {
               <strong className="heading">Your keys stay private</strong>
               <p className="body">
                 The SGA platform stores only your public Solana wallet address. Never share your seed
-                phrase or private key with this or any bot.
+                phrase or private key with this bot.
               </p>
             </span>
           </div>

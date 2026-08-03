@@ -27,7 +27,7 @@ This is MVP anti-cheat. Do not enable valuable mainnet rewards until gameplay va
 Keep claims disabled until all values are ready:
 
     REWARD_RPC_URL=https://api.devnet.solana.com
-    GAMER_TOKEN_SYMBOL=$Gamer
+    GAMER_TOKEN_SYMBOL=SGA
     GAMER_TOKEN_MINT=<DEVNET_MINT_ADDRESS>
     GAMER_TREASURY_KEYPAIR=<BASE58_DEDICATED_KEYPAIR>
     REWARD_DAILY_CAP=10000
