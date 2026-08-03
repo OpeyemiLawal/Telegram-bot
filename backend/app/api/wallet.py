@@ -236,7 +236,7 @@ async def wallet_balance(
     if mint:
         try:
             token_raw, token_decimals = await solana.get_token_amount(
-                user.wallet_address, mint, rpc_url=settings.reward_rpc_url
+                user.wallet_address, mint, rpc_url=settings.solana_rpc_url
             )
         except solana.SolanaError as exc:
             token_available = False
