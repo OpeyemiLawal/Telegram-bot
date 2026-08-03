@@ -99,7 +99,11 @@ services:
       - key: DEBUG_AUTH
         value: "0"
 
-      # Live Gamer rewards use the funded dedicated treasury on Solana mainnet.`n      - key: SOLANA_RPC_URL`n        value: https://api.mainnet-beta.solana.com`n      - key: REWARD_RPC_URL`n        value: https://api.mainnet-beta.solana.com
+      # Live Gamer rewards use the funded dedicated treasury on Solana mainnet.
+      - key: SOLANA_RPC_URL
+        value: https://api.mainnet-beta.solana.com
+      - key: REWARD_RPC_URL
+        value: https://api.mainnet-beta.solana.com
       - key: GAMER_TOKEN_SYMBOL
         value: SGA
       - key: GAMER_TOKEN_MINT

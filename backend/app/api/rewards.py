@@ -127,7 +127,8 @@ async def reward_summary_for_user(
     lifetime_claimed = account.lifetime_claimed if account else 0
     enabled = _configured(settings)
     pending_claim = await _latest_pending(user.id, session)
-    resettable = bool(`n        pending_claim
+    resettable = bool(
+        pending_claim
         and pending_claim.status == "pending"
         and pending_claim.signature is None
         and pending_claim.last_error
@@ -226,7 +227,8 @@ async def reset_failed_claim_for_user(
     session: AsyncSession,
     settings: Settings,
 ) -> ResetClaimOut:
-    """Restore a failed unsigned claim only when no transaction was submitted."""`n    claim = await _latest_pending(user.id, session, lock=True)
+    """Restore a failed unsigned claim only when no transaction was submitted."""
+    claim = await _latest_pending(user.id, session, lock=True)
     if (
         claim is None
         or claim.status != "pending"

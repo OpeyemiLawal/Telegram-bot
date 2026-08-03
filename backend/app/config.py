@@ -63,7 +63,11 @@ class Settings(BaseSettings):
     gamer_token_symbol: str = Field(default="SGA", alias="GAMER_TOKEN_SYMBOL")
 
 
-    # Reward claims are opt-in because enabling them gives this service authority.`n    # The live Gamer mint and dedicated treasury are on Solana mainnet.`n    reward_rpc_url: str = Field(`n        default="https://api.mainnet-beta.solana.com", alias="REWARD_RPC_URL"`n    )
+    # Reward claims are opt-in because enabling them gives this service authority.
+    # The live Gamer mint and dedicated treasury are on Solana mainnet.
+    reward_rpc_url: str = Field(
+        default="https://api.mainnet-beta.solana.com", alias="REWARD_RPC_URL"
+    )
     gamer_treasury_keypair: str = Field(default="", alias="GAMER_TREASURY_KEYPAIR")
     rewards_claims_enabled: bool = Field(default=False, alias="REWARDS_CLAIMS_ENABLED")
     reward_daily_cap: int = Field(default=10_000, alias="REWARD_DAILY_CAP")
