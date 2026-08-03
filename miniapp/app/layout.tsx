@@ -6,7 +6,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Solana Games",
-  description: "One wallet. Every game.",
+  description: "One SOL wallet. Every SGA game.",
   robots: { index: false, follow: false },
 };
 

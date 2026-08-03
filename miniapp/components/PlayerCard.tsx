@@ -31,7 +31,7 @@ export function PlayerCard({ user }: { user: Me }) {
   const tokenFailed = failed || balance?.token_available === false;
   const sol = !connected ? "—" : solFailed ? "—" : (balance?.sol_display ?? "…");
   const token = !connected ? "—" : tokenFailed ? "—" : (balance?.token_display ?? "…");
-  const symbol = balance?.token_symbol ?? "$Gamer";
+  const symbol = balance?.token_symbol ?? "SGA";
   const name = user.display_name || "Player";
 
   return (
@@ -68,7 +68,7 @@ export function PlayerCard({ user }: { user: Me }) {
           <span className="card__address-value">
             {connected
               ? truncate(user.wallet_address!)
-              : "Connect a wallet to continue"}
+              : "Not connected"}
           </span>
         </div>
 
@@ -96,7 +96,7 @@ export function PlayerCard({ user }: { user: Me }) {
                 className="card__balance-dot card__balance-dot--reward"
                 aria-hidden
               />
-              Gamer
+              SGA
             </span>
             <span
               className={

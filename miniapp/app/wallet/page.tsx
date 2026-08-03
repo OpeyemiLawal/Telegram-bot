@@ -260,7 +260,7 @@ function DesktopRoutes() {
           </h2>
           <p className="desktop-routes__intro">
             Telegram Desktop cannot connect directly to Solana wallets. Choose
-            either option below; setup takes less than a minute.
+            one of the options below. The setup process takes less than a minute.
           </p>
         </div>
       </div>
@@ -287,10 +287,10 @@ function DesktopRoutes() {
           <span className="desktop-routes__number">2</span>
           <div className="desktop-routes__option-body">
             <strong className="desktop-routes__option-title">
-              Use Telegram Web
+              Use Telegram on the web
             </strong>
             <p className="desktop-routes__option-text">
-              Open Telegram Web in your browser, find this bot, then open Wallet.
+              Open https://t.me/sgatokenbot, then open Wallet.
             </p>
             <a
               className="desktop-routes__link"
@@ -585,11 +585,11 @@ function ConnectedWalletConnector({
     choose: {
       eyebrow:
         telegramSurface() === "desktop"
-          ? "Not available here"
+          ? "Notice"
           : "Step 1 of 2 — choose",
       body:
         telegramSurface() === "mobile"
-          ? "Pick the wallet you already use. We never create one for you and never see your keys."
+          ? "Pick the Solana wallet you would like to connect. We never get to see your keys."
           : telegramSurface() === "web"
             ? "Scan the code with the Solana wallet on your phone, or use a browser extension if you have one."
             : // The detail lives in DesktopRoutes below, which has room for two
@@ -603,15 +603,15 @@ function ConnectedWalletConnector({
     },
     approving: {
       eyebrow: "Step 2 of 2 — approve",
-      body: "Approve the signature in your wallet, then come back. It costs no SOL and moves nothing.",
+      body: "Approve the signature in your wallet, then come back. It does not cost you any SGA or SOL.",
     },
     declined: {
       eyebrow: "Step 2 of 2 — approve",
-      body: "The signature was not completed, so nothing was linked. Your wallet is untouched.",
+      body: "The signature was not completed, so nothing was linked. Your wallet remains disconnected.",
     },
     linked: {
       eyebrow: "Wallet linked",
-      body: "Every game here will use this wallet. You approve each transaction yourself.",
+      body: "Every solanagames.app game through the @sgatokenbot will use this wallet. You approve each transaction yourself.",
     },
   };
 
@@ -634,7 +634,7 @@ function ConnectedWalletConnector({
           ? shortAddress(user.wallet_address)
           : address
             ? shortAddress(address)
-            : "No wallet yet"}
+            : "Pick SGA play-to-earn games by:"}
       </p>
 
       {COPY[stage].body && <p className="body">{COPY[stage].body}</p>}
@@ -746,7 +746,7 @@ function RewardsPanel({ user }: { user: Me }) {
       setSummary(await getRewardSummary());
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load rewards.");
+      setError(err instanceof Error ? err.message : "Could not load SGA rewards.");
     }
   }, []);
 
@@ -764,7 +764,7 @@ function RewardsPanel({ user }: { user: Me }) {
       await load();
     } catch (err) {
       notify("error");
-      setError(err instanceof Error ? err.message : "Could not reset the failed claim.");
+      setError(err instanceof Error ? err.message : "Could not reset the failed SGAclaim.");
     } finally {
       setWorking(false);
     }
@@ -780,7 +780,7 @@ function RewardsPanel({ user }: { user: Me }) {
       await load();
     } catch (err) {
       notify("error");
-      setError(err instanceof Error ? err.message : "Could not claim rewards.");
+      setError(err instanceof Error ? err.message : "Could not claim SGA rewards.");
     } finally {
       setWorking(false);
     }
@@ -790,13 +790,13 @@ function RewardsPanel({ user }: { user: Me }) {
     return <div className="skeleton" style={{ height: 170, marginTop: 16 }} />;
   }
 
-  const symbol = summary?.token_symbol ?? "$Gamer";
+  const symbol = summary?.token_symbol ?? "SGA";
   const available = summary?.available_amount ?? 0;
 
   return (
     <section
       className="wallet-panel reward-panel"
-      aria-label="Game rewards"
+      aria-label="SGA game rewards"
     >
       <div className="wallet-panel__header">
         <span>
@@ -848,7 +848,7 @@ function RewardsPanel({ user }: { user: Me }) {
             disabled={working}
             onClick={() => void resetPending()}
           >
-            {working ? "Resetting..." : "Reset failed claim"}
+            {working ? "Resetting..." : "Reset failed SGA claim"}
           </button>
         )}
         <button
@@ -856,7 +856,7 @@ function RewardsPanel({ user }: { user: Me }) {
           disabled={working || !summary?.can_claim}
           onClick={() => void claimAll()}
         >
-          {working ? "Sending..." : "Claim rewards"}
+          {working ? "Sending..." : "Claim SGA rewards"}
         </button>
         {claim?.explorer_url && (
           <button
