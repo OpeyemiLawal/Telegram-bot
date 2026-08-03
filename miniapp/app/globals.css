@@ -666,6 +666,116 @@ details.notice > summary::-webkit-details-marker {
   box-shadow: none;
 }
 
+.desktop-routes {
+  width: 100%;
+  margin-top: 4px;
+  padding: 16px;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-md);
+  background: var(--tg-surface);
+}
+
+.desktop-routes__header {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.desktop-routes__icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--soft-link);
+  color: var(--tg-link);
+  font-size: 18px;
+  font-weight: 750;
+}
+
+.desktop-routes__title {
+  margin: 0;
+  color: var(--tg-text);
+  font-size: 16px;
+  font-weight: 750;
+  line-height: 21px;
+}
+
+.desktop-routes__intro {
+  margin: 4px 0 0;
+  color: var(--tg-subtitle);
+  font-size: 13px;
+  line-height: 19px;
+}
+
+.desktop-routes__options {
+  display: grid;
+  gap: 9px;
+  margin-top: 15px;
+}
+
+.desktop-routes__option {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--tg-section);
+}
+
+.desktop-routes__number {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--tg-button);
+  color: var(--tg-button-text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.desktop-routes__option-body {
+  min-width: 0;
+}
+
+.desktop-routes__option-title {
+  display: block;
+  color: var(--tg-text);
+  font-size: 14px;
+  line-height: 19px;
+}
+
+.desktop-routes__option-text {
+  margin: 3px 0 0;
+  color: var(--tg-subtitle);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.desktop-routes__link {
+  display: block;
+  margin-top: 7px;
+  overflow-wrap: anywhere;
+  color: var(--tg-link);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 17px;
+  text-decoration: none;
+}
+
+.desktop-routes__footer {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 13px 1px 0;
+  color: var(--success);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 17px;
+}
+
 .wallet-panel__header {
   display: flex;
   align-items: flex-start;

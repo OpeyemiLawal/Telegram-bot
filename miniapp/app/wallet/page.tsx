@@ -251,47 +251,64 @@ function DesktopRoutes() {
   const link = process.env.NEXT_PUBLIC_TELEGRAM_RETURN_URL;
 
   return (
-    <div className="notice" style={{ marginTop: 4 }}>
-      <p className="heading" style={{ marginBottom: 8 }}>
-        Connect from your phone or browser
-      </p>
-      <p className="body">
-        The Telegram desktop app cannot reach the wallet network, so a wallet
-        cannot be connected here. Both of these take under a minute:
-      </p>
+    <section className="desktop-routes" aria-labelledby="desktop-routes-title">
+      <div className="desktop-routes__header">
+        <span className="desktop-routes__icon" aria-hidden="true">↗</span>
+        <div>
+          <h2 id="desktop-routes-title" className="desktop-routes__title">
+            Continue on another device
+          </h2>
+          <p className="desktop-routes__intro">
+            Telegram Desktop cannot connect directly to Solana wallets. Choose
+            either option below; setup takes less than a minute.
+          </p>
+        </div>
+      </div>
 
-      <ol className="body" style={{ margin: "12px 0 0", paddingLeft: 20 }}>
-        <li style={{ marginBottom: 10 }}>
-          <strong>On your phone</strong> — open this bot in Telegram and tap
-          Play. Two taps, nothing to scan.
-          {link ? (
-            <div
-              style={{
-                marginTop: 4,
-                fontSize: 12,
-                fontFamily: "ui-monospace, monospace",
-                wordBreak: "break-all",
-                opacity: 0.75,
-              }}
+      <div className="desktop-routes__options">
+        <div className="desktop-routes__option">
+          <span className="desktop-routes__number">1</span>
+          <div className="desktop-routes__option-body">
+            <strong className="desktop-routes__option-title">
+              Use Telegram on your phone
+            </strong>
+            <p className="desktop-routes__option-text">
+              Open this bot on your phone, then tap 🏧 Wallet.
+            </p>
+            {link ? (
+              <a className="desktop-routes__link" href={link}>
+                {link}
+              </a>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="desktop-routes__option">
+          <span className="desktop-routes__number">2</span>
+          <div className="desktop-routes__option-body">
+            <strong className="desktop-routes__option-title">
+              Use Telegram Web
+            </strong>
+            <p className="desktop-routes__option-text">
+              Open Telegram Web in your browser, find this bot, then open Wallet.
+            </p>
+            <a
+              className="desktop-routes__link"
+              href="https://web.telegram.org"
+              target="_blank"
+              rel="noreferrer"
             >
-              {link}
-            </div>
-          ) : null}
-        </li>
-        <li>
-          <strong>In a browser</strong> — open{" "}
-          <span style={{ fontFamily: "ui-monospace, monospace" }}>
-            web.telegram.org
-          </span>
-          , find this bot, and launch the app from there.
-        </li>
-      </ol>
+              Open web.telegram.org
+            </a>
+          </div>
+        </div>
+      </div>
 
-      <p className="body" style={{ marginTop: 12, opacity: 0.75 }}>
-        Once connected, your wallet stays linked to your account — you will not
-        need to do this again, and the desktop app works normally afterwards.
+      <p className="desktop-routes__footer">
+        <span aria-hidden="true">✓</span>
+        Connect once. Your wallet stays linked on Telegram Desktop afterwards.
       </p>
-    </div>
+    </section>
   );
 }
 
@@ -907,7 +924,7 @@ export default function WalletPage() {
             <span className="eyebrow">Account</span>
             <h1 className="display">Wallet</h1>
             <p className="body">
-              Your balances, linked wallet, and game rewards in one place.
+              Your play-to-earn vault and on-demand crypto ATM all in one secure SGA and SOL wallet.
             </p>
           </header>
 

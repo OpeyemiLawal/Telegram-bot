@@ -31,8 +31,7 @@ export default function Home() {
       {(user) => (
         <>
           <header className="page-header page-header--home">
-            <span className="eyebrow">Solana Games</span>
-            <h1 className="display">Your gaming wallet</h1>
+            <span className="eyebrow">solanagames.app</span>
             <p className="body">
               One secure wallet connection for every game and reward.
             </p>
@@ -47,7 +46,7 @@ export default function Home() {
                 <WalletIcon />
               </span>
               <span className="tile__body">
-                <span className="heading">Wallet and rewards</span>
+                <span className="heading">SGA/SOL Wallet & Rewards</span>
                 <p className="body">
                   {user.wallet_address
                     ? "View balances, rewards, and your linked wallet."
