@@ -62,12 +62,6 @@ class Settings(BaseSettings):
     gamer_token_mint: str = Field(default="", alias="GAMER_TOKEN_MINT")
     gamer_token_symbol: str = Field(default="SGA", alias="GAMER_TOKEN_SYMBOL")
 
-    @field_validator("gamer_token_symbol")
-    @classmethod
-    def _normalise_legacy_gamer_symbol(cls, value: str) -> str:
-        """Keep old $Gamer deployments displaying under the SGA ticker."""
-        cleaned = value.strip()
-        return "SGA" if cleaned.lower() in {"$gamer", "gamer"} else (cleaned or "SGA")
 
     # Reward claims are opt-in because enabling them gives this service authority
     # over a funded treasury token account. Start on devnet and use a dedicated
