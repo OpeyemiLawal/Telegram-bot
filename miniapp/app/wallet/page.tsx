@@ -795,7 +795,7 @@ function RewardsPanel({ user }: { user: Me }) {
     return <div className="skeleton" style={{ height: 170, marginTop: 16 }} />;
   }
 
-  const symbol = "SGA";
+  const symbol = summary?.token_symbol ?? "SGA";
   const available = summary?.available_amount ?? 0;
 
   return (
@@ -826,7 +826,7 @@ function RewardsPanel({ user }: { user: Me }) {
       </div>
 
       <p className="body reward-panel__rule">
-        SOL rewards earned in Ride Girl can be sent directly to your linked wallet.
+        SGA rewards earned in the games can be airdropped directly to your linked wallet. You just have to claim them.
       </p>
 
       {summary?.pending_error && (
