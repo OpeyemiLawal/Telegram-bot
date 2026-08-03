@@ -256,11 +256,11 @@ function DesktopRoutes() {
         <span className="desktop-routes__icon" aria-hidden="true">↗</span>
         <div>
           <h2 id="desktop-routes-title" className="desktop-routes__title">
-            Continue on another device
+            Choose other SGA play-to-earn options
           </h2>
           <p className="desktop-routes__intro">
-            Telegram Desktop cannot connect directly to Solana wallets. Choose
-            one of the options below. The setup process takes less than a minute.
+            Telegram Desktop cannot connect directly to Solana wallets. Visit a browswer, then download a Phantom, Solflare, or Backback extension. 
+            The setup process takes less than a minute.
           </p>
         </div>
       </div>
@@ -276,9 +276,14 @@ function DesktopRoutes() {
               Open this bot on your phone, then tap 🏧 Wallet.
             </p>
             {link ? (
-              <a className="desktop-routes__link" href={link}>
-                {link}
-              </a>
+              <a
+                className="desktop-routes__link"
+                href="https://t.me/sgatokenbot"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open t.me/sgatokenbot
+            </a>
             ) : null}
           </div>
         </div>
@@ -290,7 +295,7 @@ function DesktopRoutes() {
               Use Telegram on the web
             </strong>
             <p className="desktop-routes__option-text">
-              Open https://t.me/sgatokenbot, then open Wallet.
+              Open Telegram Web, then the @sgatokenbot, and tap 🏧 Wallet.
             </p>
             <a
               className="desktop-routes__link"
@@ -611,7 +616,7 @@ function ConnectedWalletConnector({
     },
     linked: {
       eyebrow: "Wallet linked",
-      body: "Every solanagames.app game through the @sgatokenbot will use this wallet. You approve each transaction yourself.",
+      body: "Every solanagames.app play-to-earn game through the t.me/sgatokenbot will use this wallet. You approve each transaction yourself.",
     },
   };
 
@@ -634,7 +639,7 @@ function ConnectedWalletConnector({
           ? shortAddress(user.wallet_address)
           : address
             ? shortAddress(address)
-            : "Pick SGA play-to-earn games by:"}
+            : "SGA play-to-earn options"}
       </p>
 
       {COPY[stage].body && <p className="body">{COPY[stage].body}</p>}
@@ -764,7 +769,7 @@ function RewardsPanel({ user }: { user: Me }) {
       await load();
     } catch (err) {
       notify("error");
-      setError(err instanceof Error ? err.message : "Could not reset the failed SGAclaim.");
+      setError(err instanceof Error ? err.message : "Could not reset the failed SGA claim.");
     } finally {
       setWorking(false);
     }
@@ -821,7 +826,7 @@ function RewardsPanel({ user }: { user: Me }) {
       </div>
 
       <p className="body reward-panel__rule">
-        Rewards earned in Tap Rush can be sent directly to your linked wallet.
+        SOL rewards earned in Ride Girl can be sent directly to your linked wallet.
       </p>
 
       {summary?.pending_error && (
@@ -829,7 +834,7 @@ function RewardsPanel({ user }: { user: Me }) {
       )}
 
       {!user.wallet_address && (
-        <p className="wallet-panel__error">Connect a wallet before claiming.</p>
+        <p className="wallet-panel__error">Connect a wallet before claiming SGA rewards.</p>
       )}
 
       {summary && !summary.claims_enabled && (
@@ -924,7 +929,7 @@ export default function WalletPage() {
             <span className="eyebrow">Account</span>
             <h1 className="display">Wallet</h1>
             <p className="body">
-              Your play-to-earn vault and on-demand crypto ATM all in one secure SGA and SOL wallet.
+              Your secure SGA and SOL play-to-earn, on-demand wallet.
             </p>
           </header>
 
@@ -937,8 +942,8 @@ export default function WalletPage() {
             <span className="notice__body">
               <strong className="heading">Your keys stay private</strong>
               <p className="body">
-                Solana Games stores only your public address. Never share a seed
-                phrase or private key with any bot.
+                The SGA platform stores only your public Solana wallet address. Never share your seed
+                phrase or private key with this or any bot.
               </p>
             </span>
           </div>

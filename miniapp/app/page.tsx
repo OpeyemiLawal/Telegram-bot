@@ -33,7 +33,7 @@ export default function Home() {
           <header className="page-header page-header--home">
             <span className="eyebrow">solanagames.app</span>
             <p className="body">
-              One secure wallet connection for every game and reward.
+              One secure wallet connection for every solanagames.app game and SGA reward.
             </p>
           </header>
 
@@ -66,7 +66,7 @@ export default function Home() {
             <span className="notice__body">
               <strong className="heading">You stay in control</strong>
               <p className="body">
-                We store only your public address. Every transaction is sent
+                We store only your Solana public address. Every transaction is sent
                 directly to your linked wallet.
               </p>
             </span>
