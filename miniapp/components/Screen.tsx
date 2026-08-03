@@ -14,8 +14,8 @@ export function Masthead() {
           SG
         </span>
         <span className="masthead__copy">
-          <strong className="masthead__mark">Solana Games</strong>
-          <span className="masthead__caption">Wallet and rewards</span>
+          <strong className="masthead__mark">solanagames.app</strong>
+          <span className="masthead__caption">SGA/SOL Wallet & Rewards</span>
         </span>
       </div>
       <span className="masthead__status">Secure</span>
