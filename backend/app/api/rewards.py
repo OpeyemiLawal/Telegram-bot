@@ -1,5 +1,3 @@
-"""Player reward balance and safe Gamer Token claim endpoints."""
-
 from __future__ import annotations
 
 import uuid
@@ -96,7 +94,7 @@ async def _pending_amount(user_id: uuid.UUID, session: AsyncSession) -> int:
 
 def _claim_out(claim: RewardClaim, settings: Settings) -> ClaimOut:
     if claim.status == "confirmed":
-        message = "Gamer Tokens were sent to your linked wallet."
+        message = "Your SGA rewards have been airdropped to your linked wallet."
     elif claim.status == "submitted":
         message = "Transfer submitted to Solana."
     elif claim.last_error:
@@ -164,7 +162,7 @@ async def claim_for_user(
     if not _configured(settings):
         raise HTTPException(
             status_code=503,
-            detail="Gamer Token claims are not enabled yet.",
+            detail="SGA claims are not enabled yet.",
         )
 
     existing = await _latest_pending(user.id, session)

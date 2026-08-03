@@ -127,7 +127,7 @@ async def current_game_session(
     settings: Settings = Depends(get_settings),
 ) -> GameSession:
     if credentials is None or credentials.scheme.lower() != "bearer":
-        raise HTTPException(status_code=401, detail="Open the game from Telegram.")
+        raise HTTPException(status_code=401, detail="Open one of the SGA games from Telegram.")
 
     try:
         claims = read_game_token(
@@ -136,14 +136,14 @@ async def current_game_session(
             issuer=GAME_ISSUER,
         )
     except TokenError as exc:
-        raise HTTPException(status_code=401, detail="Open the game from Telegram.") from exc
+        raise HTTPException(status_code=401, detail="Open one of the SGA games from Telegram.") from exc
 
     game = await _live_game(claims.game_slug, session)
     _require_registered_origin(request, game)
 
     user = await session.get(User, claims.user_id)
     if user is None or user.is_blocked:
-        raise HTTPException(status_code=401, detail="Open the game from Telegram.")
+        raise HTTPException(status_code=401, detail="Open one of the SGA games from Telegram.")
 
     return GameSession(user=user, game=game)
 

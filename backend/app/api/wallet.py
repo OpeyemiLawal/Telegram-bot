@@ -61,7 +61,7 @@ def _base58_decode(value: str) -> bytes:
 def _validate_address(address: str) -> bytes:
     public_key = _base58_decode(address)
     if len(public_key) != 32:
-        raise ValueError("Solana public keys must contain 32 bytes")
+        raise ValueError("Solana public keys must contain 32 bytes.")
     return public_key
 
 
@@ -92,7 +92,7 @@ async def create_wallet_challenge(
     message = (
         f"{domain} wants you to sign in with your Solana account:\n"
         f"{body.address}\n\n"
-        "Link this wallet to your verified Solana Games Telegram account.\n\n"
+        "Link this wallet to your verified Telegram account.\n\n"
         f"URI: {settings.miniapp_url}\n"
         "Version: 1\n"
         "Chain ID: mainnet\n"
@@ -155,10 +155,9 @@ async def connect_wallet(
     await refresh_menu(session, user_id=user.id, has_wallet=True)
     await announce(
         user.telegram_id,
-        "✅ Wallet linked.\n\n"
+        "Wallet linked:\n\n"
         f"<code>{body.address}</code>\n\n"
-        "Every game here will use this wallet. You approve each transaction "
-        "yourself — we cannot move funds for you.",
+        "Every solanagames.app play-to-earn game will use this wallet. You approve every transaction yourself. We cannot move funds or see your private keys.",
     )
 
     return _to_out(user)
@@ -268,7 +267,7 @@ async def disconnect_wallet(
     await refresh_menu(session, user_id=user.id, has_wallet=False)
     await announce(
         user.telegram_id,
-        "Wallet disconnected. Nothing was moved — we only forgot the address.",
+        "Wallet disconnected. Reconnect anytime to continue earning SGA rewards.",
     )
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
