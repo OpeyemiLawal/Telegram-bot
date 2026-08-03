@@ -795,7 +795,7 @@ function RewardsPanel({ user }: { user: Me }) {
     return <div className="skeleton" style={{ height: 170, marginTop: 16 }} />;
   }
 
-  const symbol = summary?.token_symbol ?? "SGA";
+  const symbol = "SGA";
   const available = summary?.available_amount ?? 0;
 
   return (

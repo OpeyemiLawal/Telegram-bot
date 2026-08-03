@@ -31,7 +31,7 @@ export function PlayerCard({ user }: { user: Me }) {
   const tokenFailed = failed || balance?.token_available === false;
   const sol = !connected ? "—" : solFailed ? "—" : (balance?.sol_display ?? "…");
   const token = !connected ? "—" : tokenFailed ? "—" : (balance?.token_display ?? "…");
-  const symbol = balance?.token_symbol ?? "SGA";
+  const symbol = "SGA";
   const name = user.display_name || "Player";
 
   return (
