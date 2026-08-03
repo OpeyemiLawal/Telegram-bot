@@ -99,12 +99,7 @@ services:
       - key: DEBUG_AUTH
         value: "0"
 
-      # Start rewards on devnet. Claims remain disabled until these secrets are
-      # configured and the dedicated treasury token account is funded.
-      - key: SOLANA_RPC_URL
-        value: https://api.mainnet-beta.solana.com
-      - key: REWARD_RPC_URL
-        value: https://api.devnet.solana.com
+      # Live Gamer rewards use the funded dedicated treasury on Solana mainnet.`n      - key: SOLANA_RPC_URL`n        value: https://api.mainnet-beta.solana.com`n      - key: REWARD_RPC_URL`n        value: https://api.mainnet-beta.solana.com
       - key: GAMER_TOKEN_SYMBOL
         value: SGA
       - key: GAMER_TOKEN_MINT

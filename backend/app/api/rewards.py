@@ -100,10 +100,7 @@ def _claim_out(claim: RewardClaim, settings: Settings) -> ClaimOut:
     elif claim.status == "submitted":
         message = "Transfer submitted to Solana."
     elif claim.last_error:
-        message = (
-            "Transfer failed before confirmation. Reset this devnet claim after "
-            "fixing the token mint."
-        )
+        message = "Transfer failed before confirmation. Reset this failed claim, then try again."
     else:
         message = "Claim is safely queued. No second claim will be created."
 
@@ -130,9 +127,7 @@ async def reward_summary_for_user(
     lifetime_claimed = account.lifetime_claimed if account else 0
     enabled = _configured(settings)
     pending_claim = await _latest_pending(user.id, session)
-    resettable = bool(
-        "devnet" in settings.reward_rpc_url.lower()
-        and pending_claim
+    resettable = bool(`n        pending_claim
         and pending_claim.status == "pending"
         and pending_claim.signature is None
         and pending_claim.last_error
@@ -231,18 +226,14 @@ async def reset_failed_claim_for_user(
     session: AsyncSession,
     settings: Settings,
 ) -> ResetClaimOut:
-    """Restore a failed unsigned claim on devnet so it can be attempted again."""
-    if "devnet" not in settings.reward_rpc_url.lower():
-        raise HTTPException(status_code=404, detail="No such reward action.")
-
-    claim = await _latest_pending(user.id, session, lock=True)
+    """Restore a failed unsigned claim only when no transaction was submitted."""`n    claim = await _latest_pending(user.id, session, lock=True)
     if (
         claim is None
         or claim.status != "pending"
         or claim.signature is not None
         or not claim.last_error
     ):
-        raise HTTPException(status_code=409, detail="No failed devnet claim to reset.")
+        raise HTTPException(status_code=409, detail="No failed unsigned claim to reset.")
 
     account = await session.scalar(
         select(RewardAccount)
@@ -255,12 +246,12 @@ async def reset_failed_claim_for_user(
     account.available_amount += claim.amount
     account.lifetime_claimed = max(0, account.lifetime_claimed - claim.amount)
     claim.status = "failed"
-    claim.last_error = "Reset by player after a failed devnet payout."
+    claim.last_error = "Reset by player after a failed payout."
     await session.flush()
     return ResetClaimOut(
         restored_amount=claim.amount,
         token_symbol=settings.gamer_token_symbol,
-        message="Failed devnet claim reset. You can claim again after fixing the mint.",
+        message="Failed claim reset. You can claim again.",
     )
 
 
